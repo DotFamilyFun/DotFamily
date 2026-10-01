@@ -72,6 +72,7 @@ You need Node.js 20 or newer. Download the ZIP of this repository or fork it, th
 
 ```bash
 npm install
+cp .env.example .env.local   # optional: fill in only what you need
 npm run build
 npm start
 ```
@@ -90,7 +91,8 @@ Optional environment variables (the site runs without any of them and shows a ca
 | `PINATA_JWT` | Enables custom picture upload on `/create` (Pinata JWT with pinFileToIPFS). Without it the character art is used. |
 | `PINATA_GATEWAY` | IPFS gateway for picture links. Default `https://ipfs.io/ipfs/`. |
 
-Put them in a `.env.local` file in the project root for local runs, or in your host's
+`.env.example` lists every variable with its format and where to get it. Copy it to
+`.env.local` in the project root for local runs, or set the values in your host's
 environment settings. Never commit real keys.
 
 ## Network in your wallet

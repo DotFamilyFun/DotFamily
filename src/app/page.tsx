@@ -15,9 +15,9 @@ export default function Home() {
         <Hero />
         <LoreSection />
         <FamilySection />
-        <ArcadeSection />
-        <ChatPreview />
         <LaunchCta />
+        <ChatPreview />
+        <ArcadeSection />
       </main>
       <SiteFooter />
     </>

@@ -14,7 +14,7 @@ export default function CreatePage() {
   return (
     <>
       <SiteHeader />
-      <main id="main" className="page !max-w-[640px]">
+      <main id="main" className="page">
         <Link href="/" className="back-link">
           <ArrowLeft className="size-4" /> Back to the family
         </Link>

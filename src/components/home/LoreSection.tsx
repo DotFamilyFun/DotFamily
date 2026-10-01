@@ -3,53 +3,27 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { BRAND } from "@/config/brand";
 import { Character } from "@/components/Character";
 import { ArrowUpRight, CloseIcon } from "@/components/icons";
-import { FAMILY, KINDS } from "@/lib/characters";
+import { KINDS } from "@/lib/characters";
 import { LORE, type LoreCard } from "@/lib/content";
 
 function CardArt({ card }: { card: LoreCard }) {
-  if (card.id === "first-dot") {
-    return (
-      <div className="lore-art">
-        <svg viewBox="0 0 300 200" className="absolute inset-0 m-auto h-[70%] w-[90%]" aria-hidden="true">
-          <ellipse cx="150" cy="100" rx="135" ry="62" fill="none" stroke="#cfc8e4" strokeWidth="1.5" transform="rotate(-12 150 100)" />
-        </svg>
-        <Character kind={card.kind} className="relative w-[46%] max-w-[170px]" />
-        <span className="sticker" style={{ left: "10%", top: "22%", transform: "rotate(-14deg)" }}>pip</span>
-        <span className="sticker" style={{ right: "6%", top: "44%", transform: "rotate(5deg)" }}>the first</span>
-        <span className="sticker" style={{ left: "20%", bottom: "12%", transform: "rotate(-6deg)" }}>1</span>
-      </div>
-    );
-  }
+  if (card.id === "first-dot") return <Character kind="dot" className="w-[110px]" />;
   if (card.id === "family") {
     return (
-      <div className="lore-art !place-items-stretch">
-        <p className="self-start text-[13px] text-[#6a6f63]">{BRAND.xHandle}</p>
-        <div className="flex items-center justify-between gap-2 self-center px-1">
-          {KINDS.map((k, i) => (
-            <span
-              key={k}
-              className="block size-[18px] shrink-0 rounded-full"
-              style={{ background: FAMILY[k].color, transform: `translateY(${i % 2 ? 8 : -4}px)` }}
-            />
-          ))}
-        </div>
-        <p className="self-end text-right text-[13px] text-[#6a6f63]">1 Oct 2026</p>
-      </div>
+      <span className="flex items-end gap-1.5">
+        {KINDS.map((k, i) => (
+          <Character key={k} kind={k} className="w-[42px]" style={{ transform: `translateY(${i % 2 ? -10 : 4}px)` }} />
+        ))}
+      </span>
     );
   }
   return (
-    <div className="lore-art">
-      <svg viewBox="0 0 200 200" className="absolute inset-0 m-auto h-[85%] w-[85%]" aria-hidden="true">
-        <circle cx="100" cy="100" r="92" fill="none" stroke="#d2dccb" strokeWidth="1" />
-        <circle cx="100" cy="100" r="66" fill="none" stroke="#d2dccb" strokeWidth="1" />
-      </svg>
-      <span className="coin relative">$</span>
-      <span className="sticker font-medium" style={{ right: "4%", top: "8%", transform: "rotate(6deg)" }}>$YOURDOT</span>
-      <span className="sticker" style={{ left: "4%", bottom: "12%", transform: "rotate(-8deg)" }}>lore → token</span>
-    </div>
+    <span className="relative">
+      <span className="coin !size-24 !text-[32px]">$</span>
+      <Character kind="spark" mood="joy" className="absolute -right-10 -top-6 w-14 rotate-12" />
+    </span>
   );
 }
 
@@ -75,7 +49,7 @@ function LoreDialog({ card, onClose }: { card: LoreCard; onClose: () => void }) 
           {card.title}
         </h2>
         {card.detail.map((p) => (
-          <p key={p} className="mt-4 leading-relaxed text-[#4a5548]">
+          <p key={p} className="mt-4 leading-relaxed text-ink-soft">
             {p}
           </p>
         ))}
@@ -93,23 +67,38 @@ function LoreDialog({ card, onClose }: { card: LoreCard; onClose: () => void }) 
   );
 }
 
+const TINTS = ["#fbf0c9", "#e8e2f7", "#dff0e4"];
+
 export function LoreSection() {
   const [open, setOpen] = useState<LoreCard | null>(null);
   return (
-    <section id="lore" className="wrap lore-section" aria-labelledby="lore-title">
-      <div className="section-heading">
-        <h2 id="lore-title">Connect the dots.</h2>
+    <section id="story" className="wrap pt-16" aria-labelledby="story-title">
+      <span id="lore" />
+      <div className="grid grid-cols-1 gap-4 pb-8 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] md:items-end">
+        <div>
+          <p className="kicker">The story</p>
+          <h2 id="story-title" className="section-title">
+            From one dot
+            <br />
+            to a family.
+          </h2>
+        </div>
+        <p className="max-w-[440px] text-[16px] leading-relaxed text-ink-soft md:justify-self-end">
+          Every token here starts the same way the family did: a character, a little lore, and somebody willing to sign for it.
+        </p>
       </div>
-      <div className="lore-grid">
-        {LORE.map((card) => (
-          <button key={card.id} type="button" className="lore-card" onClick={() => setOpen(card)} aria-haspopup="dialog" data-lore={card.id}>
-            {card.id === "first-dot" ? <span className="lore-tape" aria-hidden="true" /> : null}
-            <span className="flex items-start justify-between">
-              <span className="lore-tag">{card.tag}</span>
-              <ArrowUpRight className="size-4 text-[#5b6358]" />
+      <div className="steps">
+        {LORE.map((card, i) => (
+          <button key={card.id} type="button" className="step" onClick={() => setOpen(card)} aria-haspopup="dialog" data-lore={card.id}>
+            <span className="step-num">0{i + 1}</span>
+            <span className="step-art" style={{ background: TINTS[i] }}>
+              <CardArt card={card} />
             </span>
-            <CardArt card={card} />
-            <h3>{card.title}</h3>
+            <span className="text-[13px] font-semibold uppercase tracking-[0.08em] text-muted">{card.tag}</span>
+            <h3 className="text-[24px] leading-tight">{card.title}</h3>
+            <span className="link-arrow">
+              Read more <ArrowUpRight className="size-4" />
+            </span>
           </button>
         ))}
       </div>

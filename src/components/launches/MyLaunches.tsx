@@ -37,10 +37,10 @@ export function MyLaunches() {
 
   if (!launches.length) {
     return (
-      <div className="mt-8 flex flex-col items-center gap-4 rounded-[28px] bg-[#f5f4ed] px-6 py-10 text-center" data-born-empty>
+      <div className="mt-5 flex flex-col items-center gap-4 rounded-[32px] border border-dashed border-line-strong bg-surface px-6 py-12 text-center" data-born-empty>
         <Character kind="dot" mood="joy" className="w-24" />
         <h2 className="text-[26px]">The next family dot could be yours.</h2>
-        <p className="max-w-[480px] text-[15px] leading-relaxed text-[#5f665c]">
+        <p className="max-w-[480px] text-[15px] leading-relaxed text-ink-soft">
           Dots launched from this browser show up here, read back from Robinhood Chain. Every launch made on {BRAND.name} carries {BRAND.domain} in its
           on-chain website slot.
         </p>
@@ -52,28 +52,29 @@ export function MyLaunches() {
   }
 
   return (
-    <div className="mt-8" data-my-launches>
-      <p className="text-[14px] text-[#6f766c]">Launched from this browser · verified on {CHAIN.name}</p>
-      <div className="tile-grid mt-4">
+    <div className="mt-5" data-my-launches>
+      <p className="text-[14px] text-muted">Launched from this browser · each one read back from {CHAIN.name}</p>
+      <div className="rows mt-4">
         {launches.map((l, i) => {
           const v = verified[l.token];
           const ok = v && v !== "missing";
           return (
-            <a key={l.token} href={PONS.token(l.token)} target="_blank" rel="noreferrer" className="launch-tile !bg-[#fbefc6]">
-              <div className="flex items-center justify-between text-[13px]">
-                <span className="rounded-full bg-white px-2.5 py-1 text-[#4f5a4e]">
+            <a key={l.token} href={PONS.token(l.token)} target="_blank" rel="noreferrer" className="launch-row">
+              <Character kind={(["dot", "block", "spark", "ghost", "bean", "bloom"] as const)[i % 6]} mood="joy" />
+              <span className="min-w-0">
+                <span className="block truncate text-[16px] font-semibold">{ok ? v.name : l.name}</span>
+                <span className="block truncate text-[13px] text-muted">
+                  ${ok ? v.symbol : l.symbol} · {l.token}
+                </span>
+              </span>
+              <span className="row-pair" />
+              <span className="text-right">
+                <span className="inline-block rounded-full bg-mint px-3 py-1 text-[13px] font-semibold text-brand">
                   {v === undefined ? "Checking…" : ok && v.website.includes(BRAND.domain) ? "Born here" : ok ? "On chain" : "Not found"}
                 </span>
-                <ArrowUpRight className="size-4" />
-              </div>
-              <div className="grid place-items-center py-1">
-                <Character kind={(["dot", "block", "spark", "ghost", "bean", "bloom"] as const)[i % 6]} mood="joy" className="w-[80px]" />
-              </div>
-              <div className="min-w-0">
-                <h3 className="truncate font-sans text-[17px] tracking-normal">{ok ? v.name : l.name}</h3>
-                <span className="text-[13px] text-[#6f766c]">${ok ? v.symbol : l.symbol}</span>
-              </div>
-              <span className="truncate text-[12px] text-[#8a9087]">{l.token}</span>
+              </span>
+              <span className="row-time" />
+              <ArrowUpRight className="size-4 text-muted" />
             </a>
           );
         })}

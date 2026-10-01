@@ -23,12 +23,12 @@ export function ChatList({ items, detailed = false }: { items: ChatItem[]; detai
           </div>
           <div className="chat-bubble">
             <span className="chat-speaker">
-              <span style={{ color: "#3f4f3c" }}>{m.name}</span>
+              <span>{m.name}</span>
               {detailed && m.origin ? <span className="chat-origin">{m.origin}</span> : null}
               {detailed && m.reply_to ? <span className="chat-origin">↳ #{m.reply_to}</span> : null}
             </span>
             <p className="text-[15.5px]">{m.text}</p>
-            {detailed && m.time ? <span className="mt-1 block text-[12.5px] text-[#8d958a]">{m.time}</span> : null}
+            {detailed && m.time ? <span className="mt-1 block text-[12.5px] text-muted">{m.time}</span> : null}
           </div>
         </li>
       ))}

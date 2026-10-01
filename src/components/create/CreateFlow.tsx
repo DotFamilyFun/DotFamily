@@ -224,23 +224,25 @@ export function CreateFlow() {
   }
 
   const preview = (
-    <div className="flex items-center gap-4 rounded-[22px] border p-4" style={{ background: FAMILY[d.kind].tint, borderColor: FAMILY[d.kind].color }} data-preview>
-      {uploadPreview ? <img src={uploadPreview} alt="" className="size-16 shrink-0 rounded-2xl object-cover" /> : <Character kind={d.kind} className="w-16 shrink-0" />}
-      <div className="min-w-0">
-        <p className="truncate text-[18px]">{d.name.trim() || "Your token"}</p>
-        <p className="text-[14px] text-[#5b6358]">
-          ${d.ticker || "TICKER"}
-          {step > 0 ? ` · ${d.pair} pair` : ""}
-        </p>
+    <div className="token-card" style={{ background: FAMILY[d.kind].tint, borderColor: FAMILY[d.kind].color }} data-preview>
+      <div className="flex items-start justify-between gap-3">
+        <span className="rounded-full bg-surface px-3 py-1 text-[12.5px] font-semibold text-ink-soft">{step > 0 ? `${d.pair} pair` : "Pons V2"}</span>
+        <span className="text-[12.5px] font-semibold uppercase tracking-[0.08em] text-ink-soft">Token card</span>
       </div>
+      <div className="mt-4 grid place-items-center">
+        {uploadPreview ? <img src={uploadPreview} alt="" className="size-32 rounded-3xl object-cover" /> : <Character kind={d.kind} className="w-32" />}
+      </div>
+      <p className="mt-4 truncate font-display text-[26px] leading-tight">{d.name.trim() || "Your token"}</p>
+      <p className="text-[15px] font-semibold text-ink-soft">${d.ticker || "TICKER"}</p>
+      <p className="mt-2 line-clamp-3 text-[14px] leading-relaxed text-ink-soft">{d.story.trim() || "Your lore goes here."}</p>
     </div>
   );
 
   if (phase.kind === "confirmed") {
     return (
-      <section className="mt-10" aria-live="polite" data-launch-success>
+      <section className="mx-auto mt-6 max-w-[640px]" aria-live="polite" data-launch-success>
         <h1 className="text-[52px] leading-none max-sm:text-[42px]">It&apos;s alive.</h1>
-        <p className="mt-3 text-[14px] text-[#6f766c]">Launched on Pons · {CHAIN.name}</p>
+        <p className="mt-3 text-[14px] text-muted">Launched on Pons · {CHAIN.name}</p>
         <div className="sheet mt-8 grid gap-5">
           <div className="flex items-center gap-4 rounded-[22px] border p-4" style={{ background: FAMILY[d.kind].tint, borderColor: FAMILY[d.kind].color }}>
             {uploadPreview ? <img src={uploadPreview} alt="" className="size-16 shrink-0 rounded-2xl object-cover" /> : <Character kind={d.kind} mood="joy" className="w-16 shrink-0" />}
@@ -248,13 +250,13 @@ export function CreateFlow() {
               <p className="truncate text-[18px]" data-launched-name>
                 {phase.name}
               </p>
-              <p className="text-[14px] text-[#5b6358]">
+              <p className="text-[14px] text-ink-soft">
                 ${phase.symbol} · supply {Number(formatEther(phase.supply)).toLocaleString("en-US")}
               </p>
             </div>
           </div>
           <div className="rounded-2xl bg-white p-4">
-            <p className="text-[13px] text-[#6f766c]">Token contract</p>
+            <p className="text-[13px] text-muted">Token contract</p>
             <p className="mt-1 break-all text-[15px]" data-launched-token>
               {phase.token}
             </p>
@@ -282,7 +284,7 @@ export function CreateFlow() {
               </a>
             </div>
           </div>
-          <p className="text-[13px] text-[#6f766c]">
+          <p className="text-[13px] text-muted">
             Transaction{" "}
             <a className="underline" href={`${CHAIN.explorer}/tx/${phase.hash}`} target="_blank" rel="noreferrer">
               {shortAddress(phase.hash, 10, 8)}
@@ -308,24 +310,24 @@ export function CreateFlow() {
   const busy = phase.kind === "preparing" || phase.kind === "signing" || phase.kind === "pending";
 
   return (
-    <section className="mt-10">
-      <h1 className="text-[52px] leading-none max-sm:text-[42px]">{TITLES[step]}</h1>
-      <p className="mt-3 text-[14px] text-[#6f766c]">
-        Pons · {CHAIN.name} · chain id {CHAIN.id}
+    <section className="mt-6">
+      <p className="kicker">
+        Launchpad · {CHAIN.name} · chain id {CHAIN.id}
       </p>
-
-      <ol className="mt-8 grid grid-cols-3 gap-2" aria-label="Steps">
-        {STEPS.map((label, i) => (
-          <li key={label} className="step-pill" data-state={i === step ? "current" : i < step ? "done" : "todo"} aria-current={i === step ? "step" : undefined}>
-            <span className="step-num">{i < step ? <CheckIcon className="size-3.5" /> : i + 1}</span>
-            <span className="truncate max-sm:hidden">{label}</span>
-          </li>
-        ))}
-      </ol>
-
-      <div className="sheet mt-7 grid gap-5">
-        {preview}
-
+      <h1 className="mt-3 text-[52px] leading-none max-sm:text-[40px]">{TITLES[step]}</h1>
+      <div className="create-grid">
+        <aside className="create-aside">
+          {preview}
+          <ol className="vsteps" aria-label="Steps">
+            {STEPS.map((label, i) => (
+              <li key={label} className="vstep" data-state={i === step ? "current" : i < step ? "done" : "todo"} aria-current={i === step ? "step" : undefined}>
+                <span className="step-dot">{i < step ? <CheckIcon className="size-3.5" /> : i + 1}</span>
+                {label}
+              </li>
+            ))}
+          </ol>
+        </aside>
+      <div className="sheet grid gap-5">
         {step === 0 ? (
           <>
             <div className="grid grid-cols-6 gap-2 max-sm:grid-cols-3" role="group" aria-label="Character">
@@ -348,7 +350,7 @@ export function CreateFlow() {
             </div>
             <div>
               {uploadConfigured === false ? (
-                <p className="text-[13.5px] text-[#6f766c]" data-upload-off>
+                <p className="text-[13.5px] text-muted" data-upload-off>
                   Logo upload is not configured on this site yet. Your dot&apos;s character art is used as the token picture.
                 </p>
               ) : (
@@ -356,7 +358,7 @@ export function CreateFlow() {
                   <button
                     type="button"
                     disabled={uploadState.busy || uploadConfigured === null}
-                    className="inline-flex items-center gap-2 text-[14px] text-[#4a5548] hover:text-ink disabled:opacity-50"
+                    className="inline-flex items-center gap-2 text-[14px] text-ink-soft hover:text-ink disabled:opacity-50"
                     onClick={() => fileRef.current?.click()}
                   >
                     <UploadIcon className="size-4" /> {uploadState.busy ? "Uploading…" : logoUrl ? "Use a different picture" : "Or upload your own picture"}
@@ -364,7 +366,7 @@ export function CreateFlow() {
                   <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif" className="hidden" onChange={(e) => void onFile(e.target.files?.[0])} />
                 </>
               )}
-              {logoUrl ? <p className="mt-1 break-all text-[12.5px] text-[#6f766c]">Pinned: {logoUrl}</p> : null}
+              {logoUrl ? <p className="mt-1 break-all text-[12.5px] text-muted">Pinned: {logoUrl}</p> : null}
               {uploadState.error ? <p className="mt-1 text-[13px] text-danger">{uploadState.error}</p> : null}
             </div>
             <div className="grid grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] gap-3 max-sm:grid-cols-1">
@@ -380,7 +382,7 @@ export function CreateFlow() {
             <label className="field">
               The lore
               <textarea rows={3} value={d.story} maxLength={180} onChange={(e) => set("story", e.target.value)} aria-invalid={!validStory(d.story)} />
-              <span className="text-right text-[12px] text-[#8a9087]">{d.story.length}/180</span>
+              <span className="text-right text-[12px] text-muted">{d.story.length}/180</span>
             </label>
             <label className="field">
               X link (optional)
@@ -396,7 +398,7 @@ export function CreateFlow() {
         {step === 1 ? (
           <>
             <fieldset>
-              <legend className="mb-3 text-[14px] text-[#3c463b]">Launch pair</legend>
+              <legend className="mb-3 text-[14px] text-ink-soft">Launch pair</legend>
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3" data-pairs>
                 {PAIRS.map((p) => (
                   <button
@@ -411,7 +413,7 @@ export function CreateFlow() {
                     <img src={p.logo} alt="" width={28} height={28} className="size-7 shrink-0 rounded-full" />
                     <span className="min-w-0">
                       <span className="block text-[14px] font-medium">{p.symbol}</span>
-                      <span className="block truncate text-[12px] text-[#6f766c]">{p.name}</span>
+                      <span className="block truncate text-[12px] text-muted">{p.name}</span>
                     </span>
                   </button>
                 ))}
@@ -427,7 +429,7 @@ export function CreateFlow() {
                 onChange={(e) => validBuy(e.target.value) && set("firstBuy", e.target.value)}
                 data-first-buy
               />
-              <span className="text-[13px] leading-relaxed text-[#6f766c]">
+              <span className="text-[13px] leading-relaxed text-muted">
                 {nativePair
                   ? "Optional. Bought in the same transaction as the launch, so nobody can trade in between. The tokens go to your wallet."
                   : `A first buy on a ${pair.symbol} pair needs a token approval first. Launch here, then buy on Pons.`}
@@ -436,7 +438,7 @@ export function CreateFlow() {
             <label className="field">
               Creator fee (%)
               <input inputMode="decimal" value={d.feePct} onChange={(e) => validFee(e.target.value) && set("feePct", e.target.value)} data-creator-fee />
-              <span className="text-[13px] leading-relaxed text-[#6f766c]">A share of trading fees paid to your wallet. Pons caps it; the live cap is checked on review.</span>
+              <span className="text-[13px] leading-relaxed text-muted">A share of trading fees paid to your wallet. Pons caps it; the live cap is checked on review.</span>
             </label>
             <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-3">
               <button type="button" className="btn-outline h-12" onClick={() => setStep(0)}>
@@ -460,7 +462,7 @@ export function CreateFlow() {
             ) : null}
 
             {plan ? (
-              <div className="grid gap-2 text-[14.5px]" data-plan>
+              <div className="grid text-[14.5px]" data-plan>
                 {[
                   ["Network", `${CHAIN.name} · chain id ${CHAIN.id}`],
                   ["Contract", `${plan.functionName === "launchAndBuy" ? "Pons launch and buy" : "Pons launch factory"}`],
@@ -473,20 +475,20 @@ export function CreateFlow() {
                   ["Creator fee", `${Number(d.feePct || 0)}% to ${shortAddress(address ?? "", 6, 4)}`],
                   ["Website on chain", BRAND.domain],
                 ].map(([k, v]) => (
-                  <div key={k} className="flex items-center justify-between gap-4 rounded-2xl bg-white px-4 py-2.5">
-                    <span className="text-[#6f766c]">{k}</span>
+                  <div key={k} className="plan-row">
+                    <span className="text-muted">{k}</span>
                     <span className="min-w-0 text-right">{v}</span>
                   </div>
                 ))}
-                <div className="rounded-2xl bg-white px-4 py-2.5">
-                  <span className="text-[#6f766c]">Contract address</span>
+                <div className="mt-1 rounded-2xl bg-tile px-4 py-3">
+                  <span className="text-muted">Contract address</span>
                   <a href={explorerAddress(plan.to)} target="_blank" rel="noreferrer" className="mt-0.5 block break-all text-[13.5px] underline-offset-2 hover:underline" data-plan-contract>
                     {plan.to}
                   </a>
                 </div>
                 <ul className="mt-1 grid gap-1 text-[13px]" data-checks>
                   {plan.checks.map((c) => (
-                    <li key={c.label} className={`flex items-start gap-2 ${c.ok ? "text-[#4a5548]" : "text-danger"}`}>
+                    <li key={c.label} className={`flex items-start gap-2 ${c.ok ? "text-ink-soft" : "text-danger"}`}>
                       {c.ok ? <CheckIcon className="mt-0.5 size-3.5 shrink-0 text-ok" /> : <AlertIcon className="mt-0.5 size-3.5 shrink-0" />}
                       <span>
                         <span className="font-medium">{c.label}:</span> {c.detail}
@@ -494,13 +496,13 @@ export function CreateFlow() {
                     </li>
                   ))}
                 </ul>
-                <p className="text-[12.5px] leading-relaxed text-[#6f766c]">
+                <p className="text-[12.5px] leading-relaxed text-muted">
                   Early buyers pay a snipe tax that starts at {plan.snipeTaxStartBps / 100}% and fades to zero over {plan.snipeTaxSeconds} seconds. Name, ticker,
                   picture, lore and links are written into the token and cannot be edited after launch.
                 </p>
               </div>
             ) : address && onRobinhoodChain ? (
-              <p className="text-[14px] text-[#6f766c]">Reading live Pons terms…</p>
+              <p className="text-[14px] text-muted">Reading live Pons terms…</p>
             ) : null}
 
             {phase.kind === "pending" ? (
@@ -559,15 +561,16 @@ export function CreateFlow() {
               </button>
             </div>
             {plan && !busy ? (
-              <button type="button" className="justify-self-start text-[13px] text-[#4a5548] underline-offset-2 hover:underline" onClick={() => void prepare()}>
+              <button type="button" className="justify-self-start text-[13px] text-ink-soft underline-offset-2 hover:underline" onClick={() => void prepare()}>
                 Refresh terms
               </button>
             ) : null}
-            <p className="break-all text-[12px] text-[#8a9087]">
+            <p className="break-all text-[12px] text-muted">
               Share this draft: <span className="select-all">{link}</span>
             </p>
           </>
         ) : null}
+      </div>
       </div>
     </section>
   );

@@ -23,12 +23,13 @@ function Mountains() {
 
 export function ArcadeSection() {
   return (
-    <section className="arcade" aria-labelledby="arcade-title">
+    <section className="wrap pt-24" aria-labelledby="arcade-title">
+      <div className="arcade">
       {STARS.map((s, i) => (
         <span key={i} className="pixel-star" style={{ left: `${s.left}%`, top: `${s.top}%`, transform: s.big ? "scale(1.6)" : undefined }} aria-hidden="true" />
       ))}
       {/* Pixel moon */}
-      <svg viewBox="0 0 12 12" className="absolute -right-10 -top-6 w-[220px] max-w-[60%] opacity-90 max-sm:w-[140px]" shapeRendering="crispEdges" aria-hidden="true">
+      <svg viewBox="0 0 12 12" className="absolute -right-8 -top-8 w-[180px] max-w-[45%] opacity-90 max-sm:w-[110px]" shapeRendering="crispEdges" aria-hidden="true">
         {Array.from({ length: 12 }, (_, y) =>
           Array.from({ length: 12 }, (_, x) => {
             const d = Math.hypot(x - 5.5, y - 5.5);
@@ -38,10 +39,10 @@ export function ArcadeSection() {
           }),
         )}
       </svg>
-      <PixelSprite kind="spark" size={110} className="absolute left-[9%] top-[-34px] rotate-[-14deg] max-sm:left-[60%] max-sm:w-20" />
-      <div className="wrap arcade-inner">
+      <PixelSprite kind="spark" size={64} className="absolute left-[34%] top-8 rotate-[-14deg] max-lg:hidden" />
+      <div className="arcade-inner">
         <div>
-          <p className="kicker !text-[#bdb6e6]">Side quest</p>
+          <p className="kicker kicker-light">Game night</p>
           <h2 id="arcade-title" className="mt-4">
             Put the charts down.
             <br />
@@ -57,6 +58,7 @@ export function ArcadeSection() {
         <Arcade />
       </div>
       <Mountains />
+      </div>
     </section>
   );
 }

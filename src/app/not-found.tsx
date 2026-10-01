@@ -11,7 +11,7 @@ export default function NotFound() {
         <div className="grid justify-items-center gap-4">
           <Character kind="ghost" className="w-32" />
           <h1 className="text-[48px] leading-none">This dot wandered off.</h1>
-          <p className="text-[#5f665c]">The page you were looking for isn&apos;t part of the family.</p>
+          <p className="text-ink-soft">The page you were looking for isn&apos;t part of the family.</p>
           <Link href="/" className="btn-primary mt-2">
             Back to the family
           </Link>

@@ -23,12 +23,12 @@ export const metadata: Metadata = {
     description: BRAND.tagline,
     url: BRAND.url,
     locale: "en_US",
-    images: [{ url: "/brand/og.webp", width: 1200, height: 630, type: "image/webp", alt: "Pastel dot characters with eyes on an ivory background." }],
+    images: [{ url: "/brand/og.webp", width: 1200, height: 630, type: "image/webp", alt: "The .Dotfamily wordmark on pastel lavender." }],
   },
   twitter: { card: "summary_large_image", title, description: BRAND.tagline, site: BRAND.xHandle, images: ["/brand/og.webp"] },
 };
 
-export const viewport: Viewport = { themeColor: "#fffef9", width: "device-width", initialScale: 1 };
+export const viewport: Viewport = { themeColor: "#f2eefb", width: "device-width", initialScale: 1 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (

@@ -58,7 +58,7 @@ export function HeroCa() {
 export function FooterCa() {
   const { live, copied, copy } = useCopyCa();
   return (
-    <div className="flex min-w-0 items-center gap-2 rounded-full border border-[#d5cbe6] bg-ivory py-1 pl-4 pr-1">
+    <div className="flex min-w-0 items-center gap-2 rounded-full border border-line bg-ivory py-1 pl-4 pr-1">
       <span className="shrink-0 text-[13px] font-medium text-pine">{BRAND.symbol}</span>
       <span className="min-w-0 truncate text-[13px] text-ink">{live ? shortAddress(BRAND.ca, 6, 4) : "CA at launch"}</span>
       {live ? (

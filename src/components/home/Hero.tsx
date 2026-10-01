@@ -1,66 +1,53 @@
 import Link from "next/link";
+import { CHAIN } from "@/config/brand";
 import { Character } from "@/components/Character";
 import { HeroCa } from "@/components/CopyCa";
-import { ArrowDown, ArrowUpRight } from "@/components/icons";
+import { ArrowRight, ArrowUpRight } from "@/components/icons";
 import type { Kind, Mood } from "@/lib/characters";
 
-type Floater = { kind: Kind; mood?: Mood; d: [string, string, string]; m: [string, string, string]; mobileHidden?: boolean };
-
-// Desktop and phone positions: [left, top, width].
-const FLOATERS: Floater[] = [
-  { kind: "bloom", d: ["65%", "13%", "72px"], m: ["5%", "15%", "58px"] },
-  { kind: "block", d: ["82%", "18%", "118px"], m: ["74%", "17%", "74px"] },
-  { kind: "spark", d: ["79%", "45%", "136px"], m: ["70%", "64%", "92px"] },
-  { kind: "dot", mood: "joy", d: ["55%", "60%", "74px"], m: ["42%", "68%", "54px"] },
-  { kind: "ghost", d: ["68%", "59%", "82px"], m: ["55%", "80%", "56px"] },
-  { kind: "bean", d: ["91%", "64%", "70px"], m: ["80%", "84%", "58px"] },
+// A family photo, not a line-up: [left, top, width] as % of the panel.
+const CLUSTER: { kind: Kind; mood?: Mood; at: [number, number, number]; rotate?: number }[] = [
+  { kind: "dot", mood: "joy", at: [8, 40, 46] },
+  { kind: "block", at: [56, 8, 30], rotate: 6 },
+  { kind: "ghost", at: [12, 6, 22] },
+  { kind: "spark", at: [60, 46, 32], rotate: -8 },
+  { kind: "bloom", at: [40, 18, 20] },
+  { kind: "bean", at: [52, 74, 22] },
 ];
 
 export function Hero() {
   return (
-    <section className="hero" aria-labelledby="hero-title" id="top">
-      <svg className="hero-trail" viewBox="0 0 1000 600" preserveAspectRatio="none" style={{ inset: 0, width: "100%", height: "100%" }} aria-hidden="true">
-        <path d="M420 520 C470 430 520 440 565 470 C625 505 690 360 790 355" fill="none" stroke="#b9bdb0" strokeWidth="2" strokeLinecap="round" />
-      </svg>
-      {FLOATERS.map((f) => (
-        <span
-          key={f.kind}
-          className="floater hero-floater"
-          style={
-            {
-              "--l": f.d[0],
-              "--t": f.d[1],
-              "--w": f.d[2],
-              "--ml": f.m[0],
-              "--mt": f.m[1],
-              "--mw": f.m[2],
-            } as React.CSSProperties
-          }
-        >
-          <Character kind={f.kind} mood={f.mood} className="w-full" />
-        </span>
-      ))}
-      <div className="hero-giant" aria-hidden="true">
-        <Character kind="dot" mood="joy" className="w-full" />
-      </div>
-      <div className="hero-ground" aria-hidden="true" />
-
-      <div className="hero-copy">
-        <h1 id="hero-title">
+    <section className="wrap hero2" aria-labelledby="hero-title" id="top">
+      <div>
+        <p className="kicker">Pons launchpad · {CHAIN.name}</p>
+        <h1 id="hero-title" className="mt-5">
           Your dot.
           <br />
-          <span>Your family.</span>
+          <em>Your family.</em>
         </h1>
-        <p>Join the dot family. Create with lore. Your token.</p>
-        <div className="hero-actions">
+        <p className="mt-6 max-w-[460px] text-[19px] leading-relaxed text-ink-soft">Join the dot family. Create with lore. Your token.</p>
+        <div className="mt-8 flex flex-wrap items-center gap-3">
           <Link href="/create" className="btn-primary">
-            Start your dot <ArrowUpRight className="size-4" />
+            Start your dot <ArrowRight className="size-4" />
           </Link>
-          <a href="#lore" className="link-arrow">
-            Read the lore <ArrowDown className="size-4" />
-          </a>
+          <Link href="/launches" className="btn-outline !h-12 !px-5">
+            See launches <ArrowUpRight className="size-4" />
+          </Link>
         </div>
         <HeroCa />
+      </div>
+      <div className="cluster" aria-hidden="true">
+        {CLUSTER.map((m) => (
+          <span key={m.kind} className="member" style={{ left: `${m.at[0]}%`, top: `${m.at[1]}%`, width: `${m.at[2]}%`, rotate: m.rotate ? `${m.rotate}deg` : undefined }}>
+            <Character kind={m.kind} mood={m.mood} className="w-full" />
+          </span>
+        ))}
+        <span className="cluster-tag" style={{ right: "6%", bottom: "8%" }}>
+          lore → token
+        </span>
+        <span className="cluster-tag" style={{ left: "5%", top: "33%" }}>
+          $PIP
+        </span>
       </div>
     </section>
   );
