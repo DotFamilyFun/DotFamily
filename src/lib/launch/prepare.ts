@@ -37,6 +37,7 @@ export type LaunchInput = {
   description: string;
   website: string;
   twitter: string;
+  telegram: string;
   pairToken: Address;
   creatorTaxBps: number;
   /** First buy in wei, native ETH pairs only. 0 = plain launch. */
@@ -160,6 +161,7 @@ export async function prepareLaunch(client: PublicClient, input: LaunchInput): P
     ["Lore", input.description, LIMITS.description],
     ["Website", input.website, LIMITS.social],
     ["X link", input.twitter, LIMITS.social],
+    ["Telegram link", input.telegram, LIMITS.social],
   ];
   const over = lengths.filter(([, v, max]) => byteLength(v) > max).map(([k, v, max]) => `${k} ${byteLength(v)}/${max} bytes`);
   const textOk = over.length === 0 && input.name.length > 0 && input.symbol.length > 0;
@@ -203,7 +205,7 @@ export async function prepareLaunch(client: PublicClient, input: LaunchInput): P
     symbol: input.symbol,
     logo: input.logo,
     description: input.description,
-    socials: { twitter: input.twitter, telegram: "", discord: "", website: input.website, farcaster: "" },
+    socials: { twitter: input.twitter, telegram: input.telegram, discord: "", website: input.website, farcaster: "" },
     creatorFeeRecipient: getAddress(input.account),
     creatorTaxBps: input.creatorTaxBps,
     buybackEnabled: false,
@@ -299,14 +301,33 @@ export function parseLaunched(receipt: TransactionReceipt): Launched | null {
   return { token, curve, deployer, pairToken };
 }
 
-/** Reads a launched token back from the chain: name, symbol, supply and its website slot. */
+export type OnChainSocials = { twitter: string; telegram: string; discord: string; website: string; farcaster: string };
+
+/** Reads a launched token back from the chain: name, symbol, supply and its socials. */
 export async function readLaunchedToken(client: PublicClient, token: Address) {
   const r = <T>(functionName: string) => client.readContract({ address: token, abi: ponsV2LauncherTokenAbi, functionName } as never) as Promise<T>;
   const [name, symbol, totalSupply, info] = await Promise.all([
     r<string>("name"),
     r<string>("symbol"),
     r<bigint>("totalSupply"),
-    r<readonly [Address, string, string, { website: string }]>("getTokenInfo").catch(() => null),
+    r<readonly [Address, string, string, OnChainSocials]>("getTokenInfo").catch(() => null),
   ]);
-  return { name, symbol, totalSupply, deployer: info?.[0] ?? null, logo: info?.[1] ?? "", website: info?.[3]?.website ?? "" };
+  const socials: OnChainSocials = info?.[3] ?? { twitter: "", telegram: "", discord: "", website: "", farcaster: "" };
+  return { name, symbol, totalSupply, deployer: info?.[0] ?? null, logo: info?.[1] ?? "", socials, website: socials.website };
+}
+
+/**
+ * Proof that a token recorded in this browser was launched by that recorded
+ * transaction: the receipt succeeded and carries the factory's TokenLaunched
+ * event for this exact token, deployed by the transaction's sender.
+ */
+export async function launchedByTx(client: PublicClient, token: Address, hash: `0x${string}`): Promise<boolean | null> {
+  try {
+    const receipt = await client.getTransactionReceipt({ hash });
+    if (receipt.status !== "success") return false;
+    const ev = parseLaunched(receipt);
+    return Boolean(ev && ev.token.toLowerCase() === token.toLowerCase() && ev.deployer.toLowerCase() === receipt.from.toLowerCase());
+  } catch {
+    return null; // receipt not readable from this RPC
+  }
 }

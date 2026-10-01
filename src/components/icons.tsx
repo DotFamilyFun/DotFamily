@@ -126,3 +126,14 @@ export const SendIcon = ({ className }: P) => (
     <path d="M4 12 20 4l-6 16-3-7-7-1Z" />
   </svg>
 );
+export const TelegramIcon = ({ className }: P) => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true">
+    <path d="M21.4 3.6 2.9 10.8c-1.3.5-1.3 1.2-.2 1.5l4.7 1.5 1.8 5.6c.2.6.1.9.8.9.5 0 .7-.2 1-.5l2.3-2.2 4.8 3.5c.9.5 1.5.2 1.7-.8l3.1-14.7c.3-1.3-.5-1.9-1.5-1.5ZM8.6 13.4l9.6-6.1c.5-.3.9-.1.5.2l-8.1 7.3-.3 3.4-1.7-4.8Z" />
+  </svg>
+);
+export const GlobeIcon = ({ className }: P) => (
+  <svg {...base} className={className}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M3 12h18M12 3c2.5 2.7 3.8 5.7 3.8 9S14.5 18.3 12 21c-2.5-2.7-3.8-5.7-3.8-9S9.5 5.7 12 3Z" />
+  </svg>
+);

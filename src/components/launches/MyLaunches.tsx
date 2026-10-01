@@ -8,14 +8,26 @@ import { Character } from "@/components/Character";
 import { useLocalStore } from "@/components/wallet/useLocalStore";
 import { ArrowUpRight, PlusIcon } from "@/components/icons";
 import { launchClient } from "@/lib/launch/client";
-import { readLaunchedToken } from "@/lib/launch/prepare";
+import { launchedByTx, readLaunchedToken } from "@/lib/launch/prepare";
 import type { LaunchRecord } from "@/components/create/CreateFlow";
 
-type Verified = { name: string; symbol: string; website: string } | "missing";
+function hostOf(url: string) {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return "";
+  }
+}
+
+type Verified = { name: string; symbol: string; website: string; viaTx: boolean | null } | "missing";
 
 /**
  * Tokens launched through Dot Family from this browser. Each one is read
- * back from the chain; the website slot shows whether it was born here.
+ * back from the chain. "Born here" needs proof: the recorded transaction's
+ * receipt carries the factory's TokenLaunched event for this exact token.
+ * The website slot pointing to this site is a second signal, used only when
+ * the receipt cannot be read. Only launches this page recorded itself are
+ * listed, so third-party tokens never appear here.
  */
 export function MyLaunches() {
   const [launches] = useLocalStore<LaunchRecord[]>("dotfamily.launches", []);
@@ -26,8 +38,8 @@ export function MyLaunches() {
     let cancelled = false;
     const client = launchClient();
     for (const l of launches) {
-      readLaunchedToken(client, l.token as Address)
-        .then((info) => !cancelled && setVerified((v) => ({ ...v, [l.token]: { name: info.name, symbol: info.symbol, website: info.website } })))
+      Promise.all([readLaunchedToken(client, l.token as Address), launchedByTx(client, l.token as Address, l.hash)])
+        .then(([info, viaTx]) => !cancelled && setVerified((v) => ({ ...v, [l.token]: { name: info.name, symbol: info.symbol, website: info.website, viaTx } })))
         .catch(() => !cancelled && setVerified((v) => ({ ...v, [l.token]: "missing" })));
     }
     return () => {
@@ -41,8 +53,7 @@ export function MyLaunches() {
         <Character kind="dot" mood="joy" className="w-24" />
         <h2 className="text-[26px]">The next family dot could be yours.</h2>
         <p className="max-w-[480px] text-[15px] leading-relaxed text-ink-soft">
-          Dots launched from this browser show up here, read back from Robinhood Chain. Every launch made on {BRAND.name} carries {BRAND.domain} in its
-          on-chain website slot.
+          Dots launched from this browser show up here, each checked against its own launch transaction on Robinhood Chain.
         </p>
         <Link href="/create" className="btn-primary mt-2">
           Create a dot <PlusIcon className="size-4" />
@@ -70,7 +81,13 @@ export function MyLaunches() {
               <span className="row-pair" />
               <span className="text-right">
                 <span className="inline-block rounded-full bg-mint px-3 py-1 text-[13px] font-semibold text-brand">
-                  {v === undefined ? "Checking…" : ok && v.website.includes(BRAND.domain) ? "Born here" : ok ? "On chain" : "Not found"}
+                  {v === undefined
+                    ? "Checking…"
+                    : ok && (v.viaTx === true || (v.viaTx === null && hostOf(v.website) === BRAND.domain))
+                      ? "Born here"
+                      : ok
+                        ? "On chain"
+                        : "Not found"}
                 </span>
               </span>
               <span className="row-time" />

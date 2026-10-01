@@ -7,7 +7,8 @@ import { Character } from "@/components/Character";
 import { useWallet } from "@/components/wallet/WalletProvider";
 import { useWalletModal } from "@/components/wallet/WalletButton";
 import { useLocalStore } from "@/components/wallet/useLocalStore";
-import { AlertIcon, ArrowRight, ArrowUpRight, CheckIcon, CopyIcon, UploadIcon } from "@/components/icons";
+import { AlertIcon, ArrowRight, ArrowUpRight, CheckIcon, CopyIcon, GlobeIcon, TelegramIcon, UploadIcon, XIcon } from "@/components/icons";
+import { normaliseTelegram, normaliseWebsite, normaliseX } from "@/lib/launch/socials";
 import { FAMILY, KINDS, isKind, type Kind } from "@/lib/characters";
 import { PAIRS } from "@/lib/content";
 import { launchClient } from "@/lib/launch/client";
@@ -20,7 +21,7 @@ import { PLAN_MAX_AGE_MS, describeError, parseLaunched, prepareLaunch, readLaunc
  * wallet. Every term is read live and dry-run before the wallet prompt.
  */
 
-type Draft = { kind: Kind; name: string; ticker: string; story: string; pair: string; firstBuy: string; feePct: string; x: string };
+type Draft = { kind: Kind; name: string; ticker: string; story: string; pair: string; firstBuy: string; feePct: string; x: string; tg: string; web: string };
 
 const DEFAULT: Draft = {
   kind: "dot",
@@ -31,6 +32,8 @@ const DEFAULT: Draft = {
   firstBuy: "",
   feePct: "0",
   x: "",
+  tg: "",
+  web: "",
 };
 const STEPS = ["Your token", "Pair & buy", "Launch"];
 const TITLES = ["Shape your dot.", "Who does it pair with?", "Ready when you are."];
@@ -39,11 +42,13 @@ const validName = (v: string) => v.trim().length >= 1 && byteLength(v.trim()) <=
 const validTicker = (v: string) => /^[A-Z0-9]{1,10}$/.test(v);
 const validStory = (v: string) => v.trim().length >= 1 && v.trim().length <= 180;
 const validBuy = (v: string) => /^\d*\.?\d{0,18}$/.test(v);
-const validX = (v: string) => v === "" || /^https:\/\/(x|twitter)\.com\/[A-Za-z0-9_]{1,15}(\/status\/\d+)?\/?$/.test(v.trim());
 const validFee = (v: string) => /^\d{0,2}(\.\d{0,2})?$/.test(v) && Number(v || 0) <= 10;
 
 function draftLink(d: Draft) {
   const q = new URLSearchParams({ kind: d.kind, name: d.name.trim(), ticker: d.ticker, story: d.story.trim(), pair: d.pair });
+  if (d.x.trim()) q.set("x", d.x.trim());
+  if (d.tg.trim()) q.set("telegram", d.tg.trim());
+  if (d.web.trim()) q.set("website", d.web.trim());
   return `${BRAND.url}/create?${q.toString()}`;
 }
 
@@ -58,7 +63,7 @@ type Phase =
   | { kind: "preparing" }
   | { kind: "signing" }
   | { kind: "pending"; hash: Hex }
-  | { kind: "confirmed"; hash: Hex; token: Address; name: string; symbol: string; supply: bigint }
+  | { kind: "confirmed"; hash: Hex; token: Address; name: string; symbol: string; supply: bigint; socials: { twitter: string; telegram: string; website: string } }
   | { kind: "failed"; message: string; hash?: Hex };
 
 export type LaunchRecord = { token: Address; name: string; symbol: string; hash: Hex; at: number };
@@ -97,6 +102,9 @@ export function CreateFlow() {
     if (story && validStory(story)) next.story = story.slice(0, 180);
     const pair = q.get("pair")?.toUpperCase();
     if (pair && PAIRS.some((p) => p.symbol === pair)) next.pair = pair;
+    next.x = (q.get("x") ?? "").slice(0, 256);
+    next.tg = (q.get("telegram") ?? "").slice(0, 256);
+    next.web = (q.get("website") ?? "").slice(0, 256);
     // Applied after hydration; the static page renders the default draft first.
     const t = window.setTimeout(() => setD(next), 0);
     return () => window.clearTimeout(t);
@@ -115,7 +123,17 @@ export function CreateFlow() {
   };
   const pair = PAIRS.find((p) => p.symbol === d.pair) ?? PAIRS[0];
   const nativePair = d.pair === "ETH";
-  const step1Ok = validName(d.name) && validTicker(d.ticker) && validStory(d.story) && validX(d.x);
+  const nx = normaliseX(d.x);
+  const nt = normaliseTelegram(d.tg);
+  const nw = normaliseWebsite(d.web);
+  const socialsOk = nx.ok && nt.ok && nw.ok;
+  const step1Ok = validName(d.name) && validTicker(d.ticker) && validStory(d.story) && socialsOk;
+  /** Exactly what goes into the token's socials. An empty website falls back to this site. */
+  const onChain = {
+    twitter: nx.ok ? nx.value : "",
+    telegram: nt.ok ? nt.value : "",
+    website: nw.ok && nw.value ? nw.value : BRAND.url,
+  };
   const step2Ok = validFee(d.feePct) && (nativePair ? validBuy(d.firstBuy) : true);
   const link = useMemo(() => draftLink(d), [d]);
   const logo = logoUrl ?? `${BRAND.url}/characters/${d.kind}.webp`;
@@ -130,14 +148,15 @@ export function CreateFlow() {
             symbol: d.ticker,
             logo,
             description: d.story.trim(),
-            website: BRAND.url,
-            twitter: d.x.trim().replace("https://twitter.com/", "https://x.com/"),
+            website: onChain.website,
+            twitter: onChain.twitter,
+            telegram: onChain.telegram,
             pairToken: PAIR_ADDRESSES[d.pair],
             creatorTaxBps: Math.round(Number(d.feePct || 0) * 100),
             firstBuyWei,
           }
         : null,
-    [address, d, logo, firstBuyWei],
+    [address, d, logo, firstBuyWei, onChain.website, onChain.twitter, onChain.telegram],
   );
 
   const prepare = useCallback(async () => {
@@ -191,7 +210,7 @@ export function CreateFlow() {
       }
       const info = await readLaunchedToken(client, launched.token);
       saveLaunches([{ token: launched.token, name: info.name, symbol: info.symbol, hash, at: Date.now() }, ...launches].slice(0, 30));
-      setPhase({ kind: "confirmed", hash, token: launched.token, name: info.name, symbol: info.symbol, supply: info.totalSupply });
+      setPhase({ kind: "confirmed", hash, token: launched.token, name: info.name, symbol: info.symbol, supply: info.totalSupply, socials: info.socials });
     } catch (error) {
       setPhase({ kind: "failed", hash, message: `Sent, but the confirmation could not be read: ${describeError(error)} Check the transaction in the explorer.` });
     }
@@ -235,6 +254,22 @@ export function CreateFlow() {
       <p className="mt-4 truncate font-display text-[26px] leading-tight">{d.name.trim() || "Your token"}</p>
       <p className="text-[15px] font-semibold text-ink-soft">${d.ticker || "TICKER"}</p>
       <p className="mt-2 line-clamp-3 text-[14px] leading-relaxed text-ink-soft">{d.story.trim() || "Your lore goes here."}</p>
+      <div className="mt-3 flex items-center gap-2" aria-label="Links" data-card-links>
+        {(
+          [
+            [XIcon, "X", onChain.twitter],
+            [TelegramIcon, "Telegram", onChain.telegram],
+            [GlobeIcon, "Website", onChain.website],
+          ] as const
+        ).map(([Icon, label, value]) =>
+          value ? (
+            <span key={label} title={`${label}: ${value}`} className="grid size-8 place-items-center rounded-full bg-surface text-ink" data-card-link={label}>
+              <Icon className="size-3.5" />
+              <span className="sr-only">{`${label}: ${value}`}</span>
+            </span>
+          ) : null,
+        )}
+      </div>
     </div>
   );
 
@@ -289,8 +324,33 @@ export function CreateFlow() {
             <a className="underline" href={`${CHAIN.explorer}/tx/${phase.hash}`} target="_blank" rel="noreferrer">
               {shortAddress(phase.hash, 10, 8)}
             </a>
-            . The website slot on chain points to {BRAND.domain}, so anyone can see this dot was born here.
+            .
           </p>
+          <ul className="grid gap-2 text-[14px]" data-success-links>
+            {(
+              [
+                [XIcon, "X", phase.socials.twitter],
+                [TelegramIcon, "Telegram", phase.socials.telegram],
+                [GlobeIcon, "Website", phase.socials.website],
+              ] as const
+            ).map(([Icon, label, value]) => (
+              <li key={label} className="flex items-center gap-3">
+                <span className="grid size-8 shrink-0 place-items-center rounded-full bg-tile">
+                  <Icon className="size-3.5" />
+                </span>
+                {value && /^https:\/\//.test(value) ? (
+                  <a href={value} target="_blank" rel="noreferrer" className="min-w-0 break-all underline-offset-2 hover:underline" data-success-link={label}>
+                    {value}
+                  </a>
+                ) : value ? (
+                  <span className="min-w-0 break-all">{value}</span>
+                ) : (
+                  <span className="text-muted">{label}: none</span>
+                )}
+              </li>
+            ))}
+          </ul>
+          <p className="text-[12.5px] text-muted">Read back from the token on {CHAIN.name}.</p>
           <button
             type="button"
             className="link-arrow"
@@ -384,11 +444,45 @@ export function CreateFlow() {
               <textarea rows={3} value={d.story} maxLength={180} onChange={(e) => set("story", e.target.value)} aria-invalid={!validStory(d.story)} />
               <span className="text-right text-[12px] text-muted">{d.story.length}/180</span>
             </label>
-            <label className="field">
-              X link (optional)
-              <input value={d.x} placeholder="https://x.com/yourdot" onChange={(e) => set("x", e.target.value)} aria-invalid={!validX(d.x)} />
-              {!validX(d.x) ? <span className="text-[12.5px] text-danger">Use an x.com profile or post link.</span> : null}
-            </label>
+            <fieldset className="grid gap-3" data-socials>
+              <legend className="mb-1 text-[14px] font-medium text-ink-soft">Links (optional)</legend>
+              {(
+                [
+                  ["x", "X", XIcon, "https://x.com/yourtoken", nx],
+                  ["tg", "Telegram", TelegramIcon, "https://t.me/yourtoken", nt],
+                  ["web", "Website", GlobeIcon, "https://yourtoken.xyz", nw],
+                ] as const
+              ).map(([key, label, Icon, placeholder, norm]) => (
+                <label key={key} className="field !gap-1.5" data-social={key}>
+                  <span className="sr-only">{label}</span>
+                  <span className="flex items-center gap-2">
+                    <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-tile text-ink" aria-hidden="true">
+                      <Icon className="size-4" />
+                    </span>
+                    <input
+                      value={d[key]}
+                      placeholder={placeholder}
+                      inputMode="url"
+                      autoCapitalize="none"
+                      spellCheck={false}
+                      aria-label={label}
+                      aria-invalid={!norm.ok}
+                      onChange={(e) => set(key, e.target.value)}
+                    />
+                  </span>
+                  {!norm.ok ? (
+                    <span className="break-words pl-12 text-[12.5px] font-normal text-danger" role="status">
+                      {norm.error}
+                    </span>
+                  ) : norm.value && norm.value !== d[key].trim() ? (
+                    <span className="break-all pl-12 text-[12.5px] font-normal text-muted">Saved as {norm.value}</span>
+                  ) : null}
+                </label>
+              ))}
+              <p className="text-[12.5px] leading-relaxed text-muted">
+                Left empty, the website slot points to {BRAND.domain}. Links are written into the token and cannot be edited after launch.
+              </p>
+            </fieldset>
             <button type="button" className="btn-primary h-12 w-full" disabled={!step1Ok} onClick={() => setStep(1)}>
               Choose a pair <ArrowRight className="size-4" />
             </button>
@@ -473,11 +567,13 @@ export function CreateFlow() {
                   ["Network fee (estimate, max)", plan.networkFee > 0n ? `${eth(plan.networkFee, 8)} ETH` : "—"],
                   ["Your ETH", `${eth(plan.balance)} ETH`],
                   ["Creator fee", `${Number(d.feePct || 0)}% to ${shortAddress(address ?? "", 6, 4)}`],
-                  ["Website on chain", BRAND.domain],
+                  ["X", onChain.twitter || "Left empty"],
+                  ["Telegram", onChain.telegram || "Left empty"],
+                  ["Website", onChain.website],
                 ].map(([k, v]) => (
                   <div key={k} className="plan-row">
                     <span className="text-muted">{k}</span>
-                    <span className="min-w-0 text-right">{v}</span>
+                    <span className="min-w-0 break-all text-right" data-plan-value={k}>{v}</span>
                   </div>
                 ))}
                 <div className="mt-1 rounded-2xl bg-tile px-4 py-3">
@@ -498,7 +594,7 @@ export function CreateFlow() {
                 </ul>
                 <p className="text-[12.5px] leading-relaxed text-muted">
                   Early buyers pay a snipe tax that starts at {plan.snipeTaxStartBps / 100}% and fades to zero over {plan.snipeTaxSeconds} seconds. Name, ticker,
-                  picture, lore and links are written into the token and cannot be edited after launch.
+                  picture, lore and the X, Telegram and Website links above are written into the token exactly as shown and cannot be edited after launch.
                 </p>
               </div>
             ) : address && onRobinhoodChain ? (

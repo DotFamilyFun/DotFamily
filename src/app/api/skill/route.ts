@@ -55,6 +55,10 @@ ${base}/create?kind=dot&name=Little%20Pip&ticker=PIP&story=First%20to%20arrive.&
 - \`ticker\`: 1 to 10 uppercase letters or digits
 - \`story\`: 1 to 180 characters
 - \`pair\`: ${PAIRS.map((p) => p.symbol).join(", ")}
+- \`x\` (optional): an X handle (\`@name\`) or x.com link
+- \`telegram\` (optional): a Telegram handle (\`@name\`) or t.me link
+- \`website\` (optional): an https:// link; left empty, the token's website
+  slot points to ${base}
 
 Give the link to your human. A draft link is not a token and sends nothing
 onchain. The human reviews live Pons terms, connects their own wallet and

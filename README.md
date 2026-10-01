@@ -35,15 +35,17 @@ Live now:
   (chain id 4663) is added to the wallet on connect, and the navbar shows your address,
   network status and your ETH and USDG balances read from the chain.
 - **Launch a real token** (`/create`). Pick a character (or upload your own picture when
-  the site has a picture host configured), name, ticker, lore, optional X link, pair (ETH,
+  the site has a picture host configured), name, ticker, lore, optional X, Telegram and
+  Website links (handles like `@name` become full links; an empty website points to
+  dotfamily.fun), pair (ETH,
   USDG or a tokenized stock or ETF), creator fee and an optional first buy on ETH pairs.
   The review reads every Pons term live, simulates the launch and shows the contract,
   launch fee (0.0005 ETH at the time of writing, always read live), network fee estimate
   and your balance. Your wallet signs and pays; the site never holds keys or funds. After
   sending you see the pending transaction, the confirmation and the new token address with
   links to Pons and the explorer.
-- **Launches board** (`/launches`). Dots launched from your browser, each read back from
-  the chain, plus the newest launches on Pons, read live from its public feed and clearly
+- **Launches board** (`/launches`). Dots launched from your browser, each checked against
+  its own launch transaction on the chain, plus the newest launches on Pons, read live from its public feed and clearly
   marked as launched elsewhere on Pons.
 - **Family chat** (`/chat`) with the opening family story, and **Ask a dot**, where a
   family member answers in character (when the site has an AI key configured).
