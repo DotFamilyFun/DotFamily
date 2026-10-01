@@ -17,8 +17,8 @@ export const BRAND = {
   tagline: "Join the dot family. Create with lore. Your token.",
   description:
     "Dot Family is a playful launchpad on Robinhood Chain: pick a little character, write its lore and turn it into a token on Pons.",
-  x: "https://x.com/dotfamily_fun",
-  xHandle: "@dotfamily_fun",
+  x: "https://x.com/dotfamilyfun",
+  xHandle: "@dotfamilyfun",
   /** Public GitHub repository. Empty or the bare host hides every GitHub link. */
   github: "https://github.com/DotFamilyFun/DotFamily" as string,
   ca: CA,
