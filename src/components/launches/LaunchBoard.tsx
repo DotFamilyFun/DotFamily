@@ -4,11 +4,12 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { PONS } from "@/config/brand";
 import { Character } from "@/components/Character";
-import { ArrowUpRight, PlusIcon, RefreshIcon } from "@/components/icons";
+import { ArrowUpRight, RefreshIcon } from "@/components/icons";
 import { KINDS } from "@/lib/characters";
 import type { PonsPage } from "@/lib/pons";
+import { MyLaunches } from "@/components/launches/MyLaunches";
 
-type Feed = { born_here: { total: number; today: number }; pons: PonsPage | null; updated_at: number; stale: boolean };
+type Feed = { pons: PonsPage | null; updated_at: number; stale: boolean };
 
 const usd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", notation: "compact", maximumFractionDigits: 2 });
 const compact = new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 });
@@ -60,9 +61,6 @@ export function LaunchBoard() {
     <>
       <div className="mt-10 flex flex-wrap items-center justify-between gap-4 border-t border-line pt-6" aria-live="polite">
         <div className="flex flex-wrap gap-x-7 gap-y-2 text-[16px]">
-          <span data-born-here>
-            <span className="font-display text-[20px]">{feed ? feed.born_here.total : "—"}</span> born here
-          </span>
           <span>
             <span className="font-display text-[20px]">{pons?.totalOnPons ? compact.format(pons.totalOnPons) : "—"}</span> launched on Pons, all time
           </span>
@@ -72,16 +70,7 @@ export function LaunchBoard() {
         </button>
       </div>
 
-      <div className="mt-8 flex flex-col items-center gap-4 rounded-[28px] bg-[#f5f4ed] px-6 py-10 text-center" data-born-empty>
-        <Character kind="dot" mood="joy" className="w-24" />
-        <h2 className="text-[26px]">The first family dot could be yours.</h2>
-        <p className="max-w-[460px] text-[15px] leading-relaxed text-[#5f665c]">
-          Launching straight from Dot Family opens at launch. Tokens made here will appear on this board, confirmed on Robinhood Chain.
-        </p>
-        <Link href="/create" className="btn-primary mt-2">
-          Create a dot <PlusIcon className="size-4" />
-        </Link>
-      </div>
+      <MyLaunches />
 
       <section className="mt-16" aria-labelledby="pons-title">
         <div className="flex flex-wrap items-end justify-between gap-3">

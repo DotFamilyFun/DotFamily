@@ -103,3 +103,36 @@ export const readChainFacts = cache(async (): Promise<ChainFacts> => {
     return { ok: false, block: null, blockTime: null, gasPriceGwei: null, usdgSupply: null, readAt, latencyMs: null };
   }
 });
+
+export type RpcReply = { result?: unknown; error?: { code: number; message: string; data?: unknown } };
+
+/**
+ * Forwards calls and returns each JSON-RPC reply as the node gave it,
+ * including errors (a revert's data is what explains it). Falls back to the
+ * next endpoint only when an endpoint cannot be reached at all.
+ */
+export async function forward(calls: RpcCall[]): Promise<RpcReply[]> {
+  if (calls.length === 0) return [];
+  let lastError: unknown;
+  for (const url of endpoints()) {
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(calls.map((c, i) => ({ jsonrpc: "2.0", id: i, method: c.method, params: c.params }))),
+        cache: "no-store",
+        signal: AbortSignal.timeout(15000),
+      });
+      if (!res.ok) throw new Error(`rpc ${res.status}`);
+      const body = (await res.json()) as ({ id: number } & RpcReply)[];
+      if (!Array.isArray(body)) throw new Error("rpc batch unsupported");
+      const out: RpcReply[] = calls.map(() => ({ error: { code: -32603, message: "No reply" } }));
+      for (const item of body) out[item.id] = item.error ? { error: item.error } : { result: item.result ?? null };
+      return out;
+    } catch (error) {
+      benched.set(url, Date.now() + BENCH_MS);
+      lastError = error;
+    }
+  }
+  throw lastError;
+}

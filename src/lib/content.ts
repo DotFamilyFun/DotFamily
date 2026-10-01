@@ -110,6 +110,7 @@ export type Pair = { symbol: string; name: string; logo: string };
 /** Assets a Pons launch on Robinhood Chain can pair with. */
 export const PAIRS: Pair[] = [
   { symbol: "ETH", name: "Ether", logo: "/pairs/eth.webp" },
+  { symbol: "USDG", name: "Global Dollar", logo: "/pairs/usdg.webp" },
   { symbol: "NVDA", name: "Nvidia", logo: "/pairs/nvda.webp" },
   { symbol: "META", name: "Meta", logo: "/pairs/meta.webp" },
   { symbol: "AAPL", name: "Apple", logo: "/pairs/aapl.webp" },

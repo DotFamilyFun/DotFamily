@@ -9,8 +9,11 @@ export async function rpc<T>(method: string, params: unknown[] = []): Promise<T>
     body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
     cache: "no-store",
   });
-  const body = (await response.json()) as { result?: T; error?: string };
-  if (!response.ok || body.error) throw new Error(body.error ?? `RPC ${response.status}`);
+  const body = (await response.json()) as { result?: T; error?: string | { message?: string } };
+  if (!response.ok || body.error) {
+    const message = typeof body.error === "string" ? body.error : body.error?.message;
+    throw new Error(message ?? `RPC ${response.status}`);
+  }
   return body.result as T;
 }
 

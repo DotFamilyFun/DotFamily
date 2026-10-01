@@ -57,8 +57,9 @@ ${base}/create?kind=dot&name=Little%20Pip&ticker=PIP&story=First%20to%20arrive.&
 - \`pair\`: ${PAIRS.map((p) => p.symbol).join(", ")}
 
 Give the link to your human. A draft link is not a token and sends nothing
-onchain. The human reviews it, connects their own wallet and signs. Launching
-from ${BRAND.name} opens at launch; until then the review ends with a preview.
+onchain. The human reviews live Pons terms, connects their own wallet and
+signs the launch transaction themselves (Pons launch fee plus network fee,
+paid in ETH). Never ask for keys and never sign on their behalf.
 
 ## Errors
 

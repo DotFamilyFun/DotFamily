@@ -18,8 +18,10 @@ contract terms, pair choices and wallet prompts with nobody explaining what happ
 Dot Family turns a launch into a character with lore. You start from a family of six
 pastel dots (Pip, Cubby, Zing, Boo, Bean and Bloom), each with its own personality. You pick
 one, give it a name, a ticker and a few lines of story, choose what it pairs with, and get a
-clear review of everything before your wallet signs anything. Launches settle on Pons, the
-launchpad on Robinhood Chain, so every token lives on a real, public chain.
+clear review of everything before your wallet signs anything: the exact contract, the Pons
+launch fee, the estimated network fee and a dry run of the launch against the live chain.
+Then your own wallet launches the token on Pons V2, the launchpad on Robinhood Chain, so
+every token lives on a real, public chain.
 
 Around the launchpad sits the family itself: a lore section, a family chat, an agent guide
 so AI agents can prepare drafts for their humans, and a small game night for when the charts
@@ -32,23 +34,37 @@ Live now:
 - **Connect a wallet.** Any EVM wallet that can add a custom network. Robinhood Chain
   (chain id 4663) is added to the wallet on connect, and the navbar shows your address,
   network status and your ETH and USDG balances read from the chain.
-- **Launches board** (`/launches`). The newest launches on Pons, read live from its public
-  feed and refreshed every 15 seconds, clearly marked as launched elsewhere on Pons.
-- **Launchpad walkthrough** (`/create`). Pick a character or your own picture, name, ticker,
-  lore, pair (ETH or a tokenized stock or ETF) and an optional first buy, then review. The
-  draft is saved in your browser and can be shared as a link.
+- **Launch a real token** (`/create`). Pick a character (or upload your own picture when
+  the site has a picture host configured), name, ticker, lore, optional X link, pair (ETH,
+  USDG or a tokenized stock or ETF), creator fee and an optional first buy on ETH pairs.
+  The review reads every Pons term live, simulates the launch and shows the contract,
+  launch fee (0.0005 ETH at the time of writing, always read live), network fee estimate
+  and your balance. Your wallet signs and pays; the site never holds keys or funds. After
+  sending you see the pending transaction, the confirmation and the new token address with
+  links to Pons and the explorer.
+- **Launches board** (`/launches`). Dots launched from your browser, each read back from
+  the chain, plus the newest launches on Pons, read live from its public feed and clearly
+  marked as launched elsewhere on Pons.
 - **Family chat** (`/chat`) with the opening family story, and **Ask a dot**, where a
   family member answers in character (when the site has an AI key configured).
 - **Agent guide** (`/skill.md`) describing how an agent can read the chat and prepare a
-  draft link.
+  draft link for its human to review and sign.
 - **Game night**: a tiny pixel shooter on the home page.
 
-Coming at launch:
+Coming next:
 
-- Launching straight from Dot Family. Until then `/create` is a preview and never sends a
-  transaction; the review says so, and links to Pons if you want to launch there now.
 - The `$DOTFAMILY` contract address (every copy button reads "Published at launch" until then).
-- A "born here" board of tokens launched through Dot Family.
+- A site-wide board of every dot born here. Each launch already carries `dotfamily.fun` in
+  its on-chain website slot, so they can be found and verified by anyone.
+
+How a launch is built:
+
+- Without a first buy: `launchToken(params, 0, pair)` on the Pons V2 factory
+  `0x7eD598BcEf8bd9Edd8C97A195C6d13f40801EC7e`, sending exactly the live `launchFee()`.
+- With a first buy (ETH pairs): `launchAndBuy(...)` on the Pons launch-and-buy forwarder
+  `0xe33E9E479dF8802cb0866d5d05258bEc4cF62948`, sending the fee plus the buy, with a 5%
+  minimum-output floor. It is used only while the factory still names it as its forwarder.
+- The new token address is read from the factory's `TokenLaunched` event in the receipt.
 
 ## Run it locally
 
@@ -71,6 +87,8 @@ Optional environment variables (the site runs without any of them and shows a ca
 | `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` | Enables WalletConnect (project id from cloud.reown.com). |
 | `OPENROUTER_API_KEY` | Enables "Ask a dot" on `/chat` (key starts with `sk-or-v1-`). |
 | `OPENROUTER_MODEL` | Model for "Ask a dot". Default `meta-llama/llama-3.3-70b-instruct`. |
+| `PINATA_JWT` | Enables custom picture upload on `/create` (Pinata JWT with pinFileToIPFS). Without it the character art is used. |
+| `PINATA_GATEWAY` | IPFS gateway for picture links. Default `https://ipfs.io/ipfs/`. |
 
 Put them in a `.env.local` file in the project root for local runs, or in your host's
 environment settings. Never commit real keys.
@@ -98,11 +116,14 @@ src/
     api/logo/[cid]     cached IPFS logo proxy
     api/rpc            read-only Robinhood Chain relay with fallback endpoints
     api/skill          the agent guide served at /skill.md
+    api/upload         picture upload to IPFS (optional)
+  abi/                 Pons V2 contract interfaces (verified deployments)
   components/          home sections, launchpad, chat, wallet dialog, site chrome
   config/brand.ts      name, ticker, links, contract address, chain settings
   config/wallets.ts    wallet catalog for the connect dialog
   lib/characters.ts    the six family members, drawn as SVG
   lib/content.ts       lore, chat stories, launch pairs
+  lib/launch/          live Pons reads, launch simulation, receipt parsing
 public/                character, brand, pair and wallet images (WebP)
 ```
 

@@ -1,47 +1,81 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { BRAND, CHAIN, PONS } from "@/config/brand";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { formatEther, parseEther, type Address, type Hex } from "viem";
+import { BRAND, CHAIN, PONS, explorerAddress, shortAddress } from "@/config/brand";
 import { Character } from "@/components/Character";
 import { useWallet } from "@/components/wallet/WalletProvider";
 import { useWalletModal } from "@/components/wallet/WalletButton";
-import { ArrowRight, ArrowUpRight, CheckIcon, CopyIcon, UploadIcon } from "@/components/icons";
+import { useLocalStore } from "@/components/wallet/useLocalStore";
+import { AlertIcon, ArrowRight, ArrowUpRight, CheckIcon, CopyIcon, UploadIcon } from "@/components/icons";
 import { FAMILY, KINDS, isKind, type Kind } from "@/lib/characters";
 import { PAIRS } from "@/lib/content";
+import { launchClient } from "@/lib/launch/client";
+import { LIMITS, PAIR_ADDRESSES, byteLength } from "@/lib/launch/config";
+import { PLAN_MAX_AGE_MS, describeError, parseLaunched, prepareLaunch, readLaunchedToken, type LaunchPlan } from "@/lib/launch/prepare";
 
 /*
- * The launchpad, as a preview. It walks through the same three steps a launch
- * takes (token, pair and first buy, review), checks the wallet and network,
- * and saves the draft. It never sends a transaction: launching from Dot Family
- * opens at launch, and the review says so plainly.
+ * The launchpad. Three steps (token, pair and first buy, review), then a real
+ * Pons V2 launch on Robinhood Chain, signed and paid by the visitor's own
+ * wallet. Every term is read live and dry-run before the wallet prompt.
  */
 
-type Draft = { kind: Kind; name: string; ticker: string; story: string; pair: string; firstBuy: string };
+type Draft = { kind: Kind; name: string; ticker: string; story: string; pair: string; firstBuy: string; feePct: string; x: string };
 
-const DEFAULT: Draft = { kind: "dot", name: "Little Pip", ticker: "PIP", story: "First to arrive, last to leave. Round in all the right places.", pair: "ETH", firstBuy: "" };
-const DRAFT_KEY = "dotfamily.draft";
+const DEFAULT: Draft = {
+  kind: "dot",
+  name: "Little Pip",
+  ticker: "PIP",
+  story: "First to arrive, last to leave. Round in all the right places.",
+  pair: "ETH",
+  firstBuy: "",
+  feePct: "0",
+  x: "",
+};
 const STEPS = ["Your token", "Pair & buy", "Launch"];
 const TITLES = ["Shape your dot.", "Who does it pair with?", "Ready when you are."];
 
-const validName = (v: string) => v.trim().length >= 1 && v.trim().length <= 32;
+const validName = (v: string) => v.trim().length >= 1 && byteLength(v.trim()) <= 32;
 const validTicker = (v: string) => /^[A-Z0-9]{1,10}$/.test(v);
 const validStory = (v: string) => v.trim().length >= 1 && v.trim().length <= 180;
-const validBuy = (v: string) => v === "" || (/^\d*\.?\d*$/.test(v) && Number(v) >= 0);
+const validBuy = (v: string) => /^\d*\.?\d{0,18}$/.test(v);
+const validX = (v: string) => v === "" || /^https:\/\/(x|twitter)\.com\/[A-Za-z0-9_]{1,15}(\/status\/\d+)?\/?$/.test(v.trim());
+const validFee = (v: string) => /^\d{0,2}(\.\d{0,2})?$/.test(v) && Number(v || 0) <= 10;
 
 function draftLink(d: Draft) {
   const q = new URLSearchParams({ kind: d.kind, name: d.name.trim(), ticker: d.ticker, story: d.story.trim(), pair: d.pair });
   return `${BRAND.url}/create?${q.toString()}`;
 }
 
+const eth = (wei: bigint, digits = 6) => {
+  const [w, f = ""] = formatEther(wei).split(".");
+  const frac = f.slice(0, digits).replace(/0+$/, "");
+  return frac ? `${w}.${frac}` : w;
+};
+
+type Phase =
+  | { kind: "idle" }
+  | { kind: "preparing" }
+  | { kind: "signing" }
+  | { kind: "pending"; hash: Hex }
+  | { kind: "confirmed"; hash: Hex; token: Address; name: string; symbol: string; supply: bigint }
+  | { kind: "failed"; message: string; hash?: Hex };
+
+export type LaunchRecord = { token: Address; name: string; symbol: string; hash: Hex; at: number };
+
 export function CreateFlow() {
   const [step, setStep] = useState(0);
-  const [done, setDone] = useState(false);
   const [d, setD] = useState<Draft>(DEFAULT);
-  const [upload, setUpload] = useState<string | null>(null);
-  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [uploadPreview, setUploadPreview] = useState<string | null>(null);
+  const [uploadState, setUploadState] = useState<{ busy: boolean; error: string | null }>({ busy: false, error: null });
+  const [uploadConfigured, setUploadConfigured] = useState<boolean | null>(null);
   const [copied, setCopied] = useState(false);
+  const [plan, setPlan] = useState<LaunchPlan | null>(null);
+  const [phase, setPhase] = useState<Phase>({ kind: "idle" });
+  const [launches, saveLaunches] = useLocalStore<LaunchRecord[]>("dotfamily.launches", []);
   const fileRef = useRef<HTMLInputElement>(null);
-  const { address, onRobinhoodChain, chainId, switchNetwork, switching, balance } = useWallet();
+  const { address, onRobinhoodChain, chainId, switchNetwork, switching, sendTransaction } = useWallet();
   const { open } = useWalletModal();
 
   // A draft link (from the family section or an agent) fills the form.
@@ -68,39 +102,130 @@ export function CreateFlow() {
     return () => window.clearTimeout(t);
   }, []);
 
-  const set = <K extends keyof Draft>(key: K, value: Draft[K]) => setD((cur) => ({ ...cur, [key]: value }));
+  useEffect(() => {
+    fetch("/api/upload")
+      .then((r) => r.json())
+      .then((b: { configured?: boolean }) => setUploadConfigured(Boolean(b.configured)))
+      .catch(() => setUploadConfigured(false));
+  }, []);
+
+  const set = <K extends keyof Draft>(key: K, value: Draft[K]) => {
+    setD((cur) => ({ ...cur, [key]: value }));
+    setPlan(null);
+  };
   const pair = PAIRS.find((p) => p.symbol === d.pair) ?? PAIRS[0];
-  const step1Ok = validName(d.name) && validTicker(d.ticker) && validStory(d.story);
+  const nativePair = d.pair === "ETH";
+  const step1Ok = validName(d.name) && validTicker(d.ticker) && validStory(d.story) && validX(d.x);
+  const step2Ok = validFee(d.feePct) && (nativePair ? validBuy(d.firstBuy) : true);
   const link = useMemo(() => draftLink(d), [d]);
+  const logo = logoUrl ?? `${BRAND.url}/characters/${d.kind}.webp`;
+  const firstBuyWei = nativePair && d.firstBuy && Number(d.firstBuy) > 0 ? parseEther(d.firstBuy as `${number}`) : 0n;
 
-  function onFile(file: File | undefined) {
-    setUploadError(null);
-    if (!file) return;
-    if (!/^image\/(png|jpeg|webp)$/.test(file.type)) return setUploadError("Use a PNG, JPG or WebP image.");
-    if (file.size > 1_000_000) return setUploadError("Keep the image under 1 MB.");
-    const reader = new FileReader();
-    reader.onload = () => setUpload(String(reader.result));
-    reader.readAsDataURL(file);
-  }
+  const input = useMemo(
+    () =>
+      address
+        ? {
+            account: address as Address,
+            name: d.name.trim(),
+            symbol: d.ticker,
+            logo,
+            description: d.story.trim(),
+            website: BRAND.url,
+            twitter: d.x.trim().replace("https://twitter.com/", "https://x.com/"),
+            pairToken: PAIR_ADDRESSES[d.pair],
+            creatorTaxBps: Math.round(Number(d.feePct || 0) * 100),
+            firstBuyWei,
+          }
+        : null,
+    [address, d, logo, firstBuyWei],
+  );
 
-  function prepare() {
+  const prepare = useCallback(async () => {
+    if (!input) return null;
+    setPhase({ kind: "preparing" });
+    try {
+      const p = await prepareLaunch(launchClient(), input);
+      setPlan(p);
+      setPhase({ kind: "idle" });
+      return p;
+    } catch (error) {
+      setPlan(null);
+      setPhase({ kind: "failed", message: `Could not read Pons right now: ${describeError(error)}` });
+      return null;
+    }
+  }, [input]);
+
+  // Prepare as soon as the review opens on the right network with a wallet.
+  useEffect(() => {
+    if (step !== 2 || !input || !onRobinhoodChain || plan) return;
+    const t = window.setTimeout(() => void prepare(), 0);
+    return () => window.clearTimeout(t);
+  }, [step, input, onRobinhoodChain, plan, prepare]);
+
+  async function launch() {
     if (!address) return open();
     if (!onRobinhoodChain) return void switchNetwork();
+    let p = plan;
+    if (!p || Date.now() - p.preparedAt > PLAN_MAX_AGE_MS) p = await prepare();
+    if (!p?.ready) return;
+    setPhase({ kind: "signing" });
+    let hash: Hex;
     try {
-      window.localStorage.setItem(DRAFT_KEY, JSON.stringify({ ...d, savedAt: Date.now() }));
-    } catch {
-      // Storage can be blocked; the draft link below still carries everything.
+      hash = await sendTransaction({ to: p.to, data: p.data, value: p.value });
+    } catch (error) {
+      setPhase({ kind: "failed", message: describeError(error) });
+      return;
     }
-    setDone(true);
+    setPhase({ kind: "pending", hash });
+    try {
+      const client = launchClient();
+      const receipt = await client.waitForTransactionReceipt({ hash, timeout: 180_000 });
+      if (receipt.status !== "success") {
+        setPhase({ kind: "failed", hash, message: "The transaction reverted on chain. The network fee was spent; no token was launched." });
+        return;
+      }
+      const launched = parseLaunched(receipt);
+      if (!launched) {
+        setPhase({ kind: "failed", hash, message: "Confirmed, but no launch event was found. Check the transaction in the explorer." });
+        return;
+      }
+      const info = await readLaunchedToken(client, launched.token);
+      saveLaunches([{ token: launched.token, name: info.name, symbol: info.symbol, hash, at: Date.now() }, ...launches].slice(0, 30));
+      setPhase({ kind: "confirmed", hash, token: launched.token, name: info.name, symbol: info.symbol, supply: info.totalSupply });
+    } catch (error) {
+      setPhase({ kind: "failed", hash, message: `Sent, but the confirmation could not be read: ${describeError(error)} Check the transaction in the explorer.` });
+    }
+  }
+
+  async function onFile(file: File | undefined) {
+    setUploadState({ busy: false, error: null });
+    if (!file) return;
+    if (!/^image\/(png|jpeg|webp|gif)$/.test(file.type)) return setUploadState({ busy: false, error: "Use a PNG, JPG, WebP or GIF image." });
+    if (file.size > 4 * 1024 * 1024) return setUploadState({ busy: false, error: "Keep the image under 4 MB." });
+    setUploadState({ busy: true, error: null });
+    try {
+      const body = new FormData();
+      body.append("file", file);
+      const r = await fetch("/api/upload", { method: "POST", body });
+      const json = (await r.json()) as { url?: string; error?: string; message?: string };
+      if (r.status === 503) {
+        setUploadConfigured(false);
+        throw new Error("Logo upload is not configured on this site yet.");
+      }
+      if (!r.ok || !json.url) throw new Error(json.message ?? "The upload did not finish.");
+      if (byteLength(json.url) > LIMITS.logo) throw new Error("The picture link is too long for Pons.");
+      setLogoUrl(json.url);
+      setUploadPreview(URL.createObjectURL(file));
+      setPlan(null);
+      setUploadState({ busy: false, error: null });
+    } catch (error) {
+      setUploadState({ busy: false, error: error instanceof Error ? error.message : "The upload did not finish." });
+    }
   }
 
   const preview = (
     <div className="flex items-center gap-4 rounded-[22px] border p-4" style={{ background: FAMILY[d.kind].tint, borderColor: FAMILY[d.kind].color }} data-preview>
-      {upload ? (
-        <img src={upload} alt="" className="size-16 shrink-0 rounded-2xl object-cover" />
-      ) : (
-        <Character kind={d.kind} className="w-16 shrink-0" />
-      )}
+      {uploadPreview ? <img src={uploadPreview} alt="" className="size-16 shrink-0 rounded-2xl object-cover" /> : <Character kind={d.kind} className="w-16 shrink-0" />}
       <div className="min-w-0">
         <p className="truncate text-[18px]">{d.name.trim() || "Your token"}</p>
         <p className="text-[14px] text-[#5b6358]">
@@ -111,60 +236,83 @@ export function CreateFlow() {
     </div>
   );
 
-  if (done) {
+  if (phase.kind === "confirmed") {
     return (
-      <section className="mt-10" aria-live="polite" data-create-done>
-        <h1 className="text-[52px] leading-none max-sm:text-[42px]">Saved. Almost there.</h1>
-        <p className="mt-3 text-[14px] text-[#6f766c]">Pons · {CHAIN.name}</p>
+      <section className="mt-10" aria-live="polite" data-launch-success>
+        <h1 className="text-[52px] leading-none max-sm:text-[42px]">It&apos;s alive.</h1>
+        <p className="mt-3 text-[14px] text-[#6f766c]">Launched on Pons · {CHAIN.name}</p>
         <div className="sheet mt-8 grid gap-5">
-          {preview}
-          <div className="notice">
-            <strong className="font-medium text-ink">Launching from {BRAND.name} opens at launch.</strong> Your draft is saved in this browser and
-            nothing was sent: no transaction, no fee. When the launcher opens, this draft will be waiting for your wallet to review and sign.
+          <div className="flex items-center gap-4 rounded-[22px] border p-4" style={{ background: FAMILY[d.kind].tint, borderColor: FAMILY[d.kind].color }}>
+            {uploadPreview ? <img src={uploadPreview} alt="" className="size-16 shrink-0 rounded-2xl object-cover" /> : <Character kind={d.kind} mood="joy" className="w-16 shrink-0" />}
+            <div className="min-w-0">
+              <p className="truncate text-[18px]" data-launched-name>
+                {phase.name}
+              </p>
+              <p className="text-[14px] text-[#5b6358]">
+                ${phase.symbol} · supply {Number(formatEther(phase.supply)).toLocaleString("en-US")}
+              </p>
+            </div>
           </div>
-          <dl className="grid grid-cols-2 gap-3 text-[14px]">
-            <div className="rounded-2xl bg-white p-3">
-              <dt className="text-[#6f766c]">Wallet</dt>
-              <dd className="mt-1 truncate">{address ? `${address.slice(0, 6)}…${address.slice(-4)}` : "—"}</dd>
+          <div className="rounded-2xl bg-white p-4">
+            <p className="text-[13px] text-[#6f766c]">Token contract</p>
+            <p className="mt-1 break-all text-[15px]" data-launched-token>
+              {phase.token}
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="btn-outline"
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(phase.token);
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 1500);
+                  } catch {
+                    // The address stays readable above.
+                  }
+                }}
+              >
+                {copied ? <CheckIcon className="size-4 text-ok" /> : <CopyIcon className="size-4" />} {copied ? "Copied" : "Copy address"}
+              </button>
+              <a href={PONS.token(phase.token)} target="_blank" rel="noreferrer" className="btn-outline">
+                Open on Pons <ArrowUpRight className="size-4" />
+              </a>
+              <a href={`${CHAIN.explorer}/token/${phase.token}`} target="_blank" rel="noreferrer" className="btn-outline">
+                Explorer <ArrowUpRight className="size-4" />
+              </a>
             </div>
-            <div className="rounded-2xl bg-white p-3">
-              <dt className="text-[#6f766c]">Your ETH on {CHAIN.name}</dt>
-              <dd className="mt-1">{balance ?? "…"}</dd>
-            </div>
-          </dl>
-          <div className="flex flex-wrap gap-3">
-            <button
-              type="button"
-              className="btn-outline"
-              onClick={async () => {
-                try {
-                  await navigator.clipboard.writeText(link);
-                  setCopied(true);
-                  setTimeout(() => setCopied(false), 1500);
-                } catch {
-                  // The link is still readable below.
-                }
-              }}
-            >
-              {copied ? <CheckIcon className="size-4 text-ok" /> : <CopyIcon className="size-4" />} {copied ? "Copied" : "Copy draft link"}
-            </button>
-            <a href={PONS.home} target="_blank" rel="noreferrer" className="btn-outline">
-              Launch on Pons now <ArrowUpRight className="size-4" />
+          </div>
+          <p className="text-[13px] text-[#6f766c]">
+            Transaction{" "}
+            <a className="underline" href={`${CHAIN.explorer}/tx/${phase.hash}`} target="_blank" rel="noreferrer">
+              {shortAddress(phase.hash, 10, 8)}
             </a>
-            <button type="button" className="link-arrow" onClick={() => setDone(false)}>
-              Edit draft
-            </button>
-          </div>
-          <p className="break-all text-[12.5px] text-[#8a9087]">{link}</p>
+            . The website slot on chain points to {BRAND.domain}, so anyone can see this dot was born here.
+          </p>
+          <button
+            type="button"
+            className="link-arrow"
+            onClick={() => {
+              setPhase({ kind: "idle" });
+              setPlan(null);
+              setStep(0);
+            }}
+          >
+            Make another dot <ArrowRight className="size-4" />
+          </button>
         </div>
       </section>
     );
   }
 
+  const busy = phase.kind === "preparing" || phase.kind === "signing" || phase.kind === "pending";
+
   return (
     <section className="mt-10">
       <h1 className="text-[52px] leading-none max-sm:text-[42px]">{TITLES[step]}</h1>
-      <p className="mt-3 text-[14px] text-[#6f766c]">Pons · {CHAIN.name} · preview until launch</p>
+      <p className="mt-3 text-[14px] text-[#6f766c]">
+        Pons · {CHAIN.name} · chain id {CHAIN.id}
+      </p>
 
       <ol className="mt-8 grid grid-cols-3 gap-2" aria-label="Steps">
         {STEPS.map((label, i) => (
@@ -186,10 +334,11 @@ export function CreateFlow() {
                   key={k}
                   type="button"
                   className="avatar-choice"
-                  aria-pressed={!upload && d.kind === k}
+                  aria-pressed={!logoUrl && d.kind === k}
                   aria-label={FAMILY[k].name}
                   onClick={() => {
-                    setUpload(null);
+                    setLogoUrl(null);
+                    setUploadPreview(null);
                     set("kind", k);
                   }}
                 >
@@ -198,12 +347,25 @@ export function CreateFlow() {
               ))}
             </div>
             <div>
-              <button type="button" className="inline-flex items-center gap-2 text-[14px] text-[#4a5548] hover:text-ink" onClick={() => fileRef.current?.click()}>
-                <UploadIcon className="size-4" /> Or use your own picture
-              </button>
-              <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={(e) => onFile(e.target.files?.[0])} />
-              {upload ? <p className="mt-1 text-[12.5px] text-[#6f766c]">Shown in this preview only; it stays in your browser.</p> : null}
-              {uploadError ? <p className="mt-1 text-[13px] text-danger">{uploadError}</p> : null}
+              {uploadConfigured === false ? (
+                <p className="text-[13.5px] text-[#6f766c]" data-upload-off>
+                  Logo upload is not configured on this site yet. Your dot&apos;s character art is used as the token picture.
+                </p>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    disabled={uploadState.busy || uploadConfigured === null}
+                    className="inline-flex items-center gap-2 text-[14px] text-[#4a5548] hover:text-ink disabled:opacity-50"
+                    onClick={() => fileRef.current?.click()}
+                  >
+                    <UploadIcon className="size-4" /> {uploadState.busy ? "Uploading…" : logoUrl ? "Use a different picture" : "Or upload your own picture"}
+                  </button>
+                  <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif" className="hidden" onChange={(e) => void onFile(e.target.files?.[0])} />
+                </>
+              )}
+              {logoUrl ? <p className="mt-1 break-all text-[12.5px] text-[#6f766c]">Pinned: {logoUrl}</p> : null}
+              {uploadState.error ? <p className="mt-1 text-[13px] text-danger">{uploadState.error}</p> : null}
             </div>
             <div className="grid grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] gap-3 max-sm:grid-cols-1">
               <label className="field">
@@ -212,18 +374,18 @@ export function CreateFlow() {
               </label>
               <label className="field">
                 Ticker
-                <input
-                  value={d.ticker}
-                  maxLength={10}
-                  onChange={(e) => set("ticker", e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))}
-                  aria-invalid={!validTicker(d.ticker)}
-                />
+                <input value={d.ticker} maxLength={10} onChange={(e) => set("ticker", e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))} aria-invalid={!validTicker(d.ticker)} />
               </label>
             </div>
             <label className="field">
               The lore
               <textarea rows={3} value={d.story} maxLength={180} onChange={(e) => set("story", e.target.value)} aria-invalid={!validStory(d.story)} />
               <span className="text-right text-[12px] text-[#8a9087]">{d.story.length}/180</span>
+            </label>
+            <label className="field">
+              X link (optional)
+              <input value={d.x} placeholder="https://x.com/yourdot" onChange={(e) => set("x", e.target.value)} aria-invalid={!validX(d.x)} />
+              {!validX(d.x) ? <span className="text-[12.5px] text-danger">Use an x.com profile or post link.</span> : null}
             </label>
             <button type="button" className="btn-primary h-12 w-full" disabled={!step1Ok} onClick={() => setStep(1)}>
               Choose a pair <ArrowRight className="size-4" />
@@ -256,17 +418,31 @@ export function CreateFlow() {
               </div>
             </fieldset>
             <label className="field">
-              First buy ({pair.symbol})
-              <input inputMode="decimal" placeholder="0.0 (optional)" value={d.firstBuy} onChange={(e) => validBuy(e.target.value) && set("firstBuy", e.target.value)} />
+              First buy (ETH)
+              <input
+                inputMode="decimal"
+                placeholder={nativePair ? "0.0 (optional)" : "ETH pairs only"}
+                value={nativePair ? d.firstBuy : ""}
+                disabled={!nativePair}
+                onChange={(e) => validBuy(e.target.value) && set("firstBuy", e.target.value)}
+                data-first-buy
+              />
               <span className="text-[13px] leading-relaxed text-[#6f766c]">
-                Optional. The first tokens go straight to your wallet. Fees and gas are paid in ETH on {CHAIN.name}.
+                {nativePair
+                  ? "Optional. Bought in the same transaction as the launch, so nobody can trade in between. The tokens go to your wallet."
+                  : `A first buy on a ${pair.symbol} pair needs a token approval first. Launch here, then buy on Pons.`}
               </span>
+            </label>
+            <label className="field">
+              Creator fee (%)
+              <input inputMode="decimal" value={d.feePct} onChange={(e) => validFee(e.target.value) && set("feePct", e.target.value)} data-creator-fee />
+              <span className="text-[13px] leading-relaxed text-[#6f766c]">A share of trading fees paid to your wallet. Pons caps it; the live cap is checked on review.</span>
             </label>
             <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-3">
               <button type="button" className="btn-outline h-12" onClick={() => setStep(0)}>
                 Back
               </button>
-              <button type="button" className="btn-primary h-12" onClick={() => setStep(2)}>
+              <button type="button" className="btn-primary h-12" disabled={!step2Ok} onClick={() => setStep(2)}>
                 Review launch <ArrowRight className="size-4" />
               </button>
             </div>
@@ -275,36 +451,121 @@ export function CreateFlow() {
 
         {step === 2 ? (
           <>
-            <dl className="grid gap-2 text-[15px]">
-              {[
-                ["Pair", d.pair],
-                ["First buy", d.firstBuy && Number(d.firstBuy) > 0 ? `${d.firstBuy} ${d.pair}` : `0 ${d.pair}`],
-                ["Paid with", `ETH from your wallet`],
-                ["Picture & website", "Added automatically"],
-                ["Network", `${CHAIN.name} · chain id ${CHAIN.id}`],
-              ].map(([k, v]) => (
-                <div key={k} className="flex items-center justify-between gap-4 rounded-2xl bg-white px-4 py-3">
-                  <dt className="text-[#6f766c]">{k}</dt>
-                  <dd className="text-right">{v}</dd>
-                </div>
-              ))}
-            </dl>
-            <div className="notice" data-preview-notice>
-              This is a preview. Launching from {BRAND.name} opens at launch, so nothing is sent from this page yet. Your wallet will always show the full
-              transaction before you sign.
-            </div>
-            {address && chainId !== null && !onRobinhoodChain ? (
-              <p className="text-[13.5px] text-danger">Your wallet is on chain {chainId}. Switch to {CHAIN.name} to continue.</p>
+            {!address ? (
+              <div className="notice">Connect the wallet that will launch and pay. It becomes the token&apos;s deployer and creator fee recipient.</div>
+            ) : !onRobinhoodChain ? (
+              <p className="notice !text-danger" data-wrong-network>
+                Your wallet is on chain {chainId ?? "unknown"}. Switch to {CHAIN.name} (chain id {CHAIN.id}) to review the launch.
+              </p>
             ) : null}
+
+            {plan ? (
+              <div className="grid gap-2 text-[14.5px]" data-plan>
+                {[
+                  ["Network", `${CHAIN.name} · chain id ${CHAIN.id}`],
+                  ["Contract", `${plan.functionName === "launchAndBuy" ? "Pons launch and buy" : "Pons launch factory"}`],
+                  ["Pair", d.pair],
+                  ["Launch fee (Pons)", `${eth(plan.launchFee)} ETH`],
+                  ...(plan.firstBuyWei > 0n ? [["First buy", `${eth(plan.firstBuyWei)} ETH`]] : []),
+                  ["Sent with the transaction", `${eth(plan.value)} ETH`],
+                  ["Network fee (estimate, max)", plan.networkFee > 0n ? `${eth(plan.networkFee, 8)} ETH` : "—"],
+                  ["Your ETH", `${eth(plan.balance)} ETH`],
+                  ["Creator fee", `${Number(d.feePct || 0)}% to ${shortAddress(address ?? "", 6, 4)}`],
+                  ["Website on chain", BRAND.domain],
+                ].map(([k, v]) => (
+                  <div key={k} className="flex items-center justify-between gap-4 rounded-2xl bg-white px-4 py-2.5">
+                    <span className="text-[#6f766c]">{k}</span>
+                    <span className="min-w-0 text-right">{v}</span>
+                  </div>
+                ))}
+                <div className="rounded-2xl bg-white px-4 py-2.5">
+                  <span className="text-[#6f766c]">Contract address</span>
+                  <a href={explorerAddress(plan.to)} target="_blank" rel="noreferrer" className="mt-0.5 block break-all text-[13.5px] underline-offset-2 hover:underline" data-plan-contract>
+                    {plan.to}
+                  </a>
+                </div>
+                <ul className="mt-1 grid gap-1 text-[13px]" data-checks>
+                  {plan.checks.map((c) => (
+                    <li key={c.label} className={`flex items-start gap-2 ${c.ok ? "text-[#4a5548]" : "text-danger"}`}>
+                      {c.ok ? <CheckIcon className="mt-0.5 size-3.5 shrink-0 text-ok" /> : <AlertIcon className="mt-0.5 size-3.5 shrink-0" />}
+                      <span>
+                        <span className="font-medium">{c.label}:</span> {c.detail}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                <p className="text-[12.5px] leading-relaxed text-[#6f766c]">
+                  Early buyers pay a snipe tax that starts at {plan.snipeTaxStartBps / 100}% and fades to zero over {plan.snipeTaxSeconds} seconds. Name, ticker,
+                  picture, lore and links are written into the token and cannot be edited after launch.
+                </p>
+              </div>
+            ) : address && onRobinhoodChain ? (
+              <p className="text-[14px] text-[#6f766c]">Reading live Pons terms…</p>
+            ) : null}
+
+            {phase.kind === "pending" ? (
+              <div className="notice" data-pending>
+                Sent. Waiting for Robinhood Chain to confirm…{" "}
+                <a className="underline" href={`${CHAIN.explorer}/tx/${phase.hash}`} target="_blank" rel="noreferrer" data-pending-hash>
+                  {shortAddress(phase.hash, 10, 8)}
+                </a>
+              </div>
+            ) : null}
+            {phase.kind === "failed" ? (
+              <div className="notice !bg-danger-tint !text-danger" role="alert" data-launch-error>
+                {phase.message}
+                {phase.hash ? (
+                  <>
+                    {" "}
+                    <a className="underline" href={`${CHAIN.explorer}/tx/${phase.hash}`} target="_blank" rel="noreferrer">
+                      View transaction
+                    </a>
+                  </>
+                ) : null}
+              </div>
+            ) : plan && !plan.ready && plan.error ? (
+              <div className="notice !bg-danger-tint !text-danger" role="alert">
+                {plan.error}
+              </div>
+            ) : null}
+
             <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-3">
-              <button type="button" className="btn-outline h-12" onClick={() => setStep(1)}>
+              <button type="button" className="btn-outline h-12" disabled={busy} onClick={() => setStep(1)}>
                 Edit
               </button>
-              <button type="button" className="btn-primary h-12" onClick={prepare} disabled={switching} data-prepare>
-                {!address ? "Connect wallet to continue" : !onRobinhoodChain ? (switching ? "Confirm in wallet…" : `Switch to ${CHAIN.name}`) : "Prepare launch"}
+              <button
+                type="button"
+                className="btn-primary h-12"
+                disabled={busy || switching || (address !== null && onRobinhoodChain && plan !== null && !plan.ready)}
+                onClick={() => void launch()}
+                data-launch
+              >
+                {!address
+                  ? "Connect wallet to launch"
+                  : !onRobinhoodChain
+                    ? switching
+                      ? "Confirm in wallet…"
+                      : `Switch to ${CHAIN.name}`
+                    : phase.kind === "preparing"
+                      ? "Checking Pons…"
+                      : phase.kind === "signing"
+                        ? "Confirm in your wallet…"
+                        : phase.kind === "pending"
+                          ? "Launching…"
+                          : plan
+                            ? `Launch token · ${eth(plan.value)} ETH`
+                            : "Launch token"}
                 <ArrowRight className="size-4" />
               </button>
             </div>
+            {plan && !busy ? (
+              <button type="button" className="justify-self-start text-[13px] text-[#4a5548] underline-offset-2 hover:underline" onClick={() => void prepare()}>
+                Refresh terms
+              </button>
+            ) : null}
+            <p className="break-all text-[12px] text-[#8a9087]">
+              Share this draft: <span className="select-all">{link}</span>
+            </p>
           </>
         ) : null}
       </div>

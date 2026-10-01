@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { batch } from "@/lib/chain-server";
+import { forward } from "@/lib/chain-server";
 
 export const dynamic = "force-dynamic";
 
@@ -8,7 +8,21 @@ export const dynamic = "force-dynamic";
  * public RPC host, so the browser reads through this server instead. Only
  * read methods pass; transactions always go through the user's own wallet.
  */
-const ALLOWED = new Set(["eth_call", "eth_getTransactionReceipt", "eth_blockNumber", "eth_getLogs", "eth_getBalance", "eth_chainId"]);
+const ALLOWED = new Set([
+  "eth_call",
+  "eth_estimateGas",
+  "eth_gasPrice",
+  "eth_maxPriorityFeePerGas",
+  "eth_feeHistory",
+  "eth_getBlockByNumber",
+  "eth_getTransactionReceipt",
+  "eth_getTransactionByHash",
+  "eth_blockNumber",
+  "eth_getLogs",
+  "eth_getBalance",
+  "eth_getCode",
+  "eth_chainId",
+]);
 const MAX_CALLS = 20;
 const MAX_LOG_SPAN = 20_000;
 
@@ -34,8 +48,8 @@ export async function POST(request: Request) {
     }
   }
   try {
-    const results = await batch(calls.map((c) => ({ method: c.method, params: c.params ?? [] })));
-    const out = calls.map((c, i) => ({ jsonrpc: "2.0", id: c.id ?? i, result: results[i] }));
+    const replies = await forward(calls.map((c) => ({ method: c.method, params: c.params ?? [] })));
+    const out = calls.map((c, i) => ({ jsonrpc: "2.0", id: c.id ?? i, ...replies[i] }));
     return NextResponse.json(Array.isArray(body) ? out : out[0], { headers: { "cache-control": "no-store" } });
   } catch {
     return NextResponse.json({ error: "The chain could not be reached." }, { status: 502 });
