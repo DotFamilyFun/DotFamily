@@ -3,7 +3,7 @@
 **Your dot. Your family.**
 Join the dot family. Create with lore. Your token.
 
-Website: [dotfamily.fun](https://dotfamily.fun) · X: [@dotfamily](https://x.com/dotfamily) · Token: `$DOTFAMILY` on Robinhood Chain
+Website: [dotfamily.fun](https://dotfamily.fun) · X: [@dotfamilyfun](https://x.com/dotfamilyfun) · GitHub: [DotFamilyFun/DotFamily](https://github.com/DotFamilyFun/DotFamily) · Token: `$DOTFAMILY` on Robinhood Chain
 
 ## The problem
 
@@ -37,8 +37,7 @@ Live now:
 - **Launch a real token** (`/create`). Pick a character (or upload your own picture when
   the site has a picture host configured), name, ticker, lore, optional X, Telegram and
   Website links (handles like `@name` become full links; an empty website points to
-  dotfamily.fun), pair (ETH,
-  USDG or a tokenized stock or ETF), creator fee and an optional first buy on ETH pairs.
+  dotfamily.fun), pair (ETH, USDG or a tokenized stock or ETF), creator fee and an optional first buy on ETH pairs.
   The review reads every Pons term live, simulates the launch and shows the contract,
   launch fee (0.0005 ETH at the time of writing, always read live), network fee estimate
   and your balance. Your wallet signs and pays; the site never holds keys or funds. After
@@ -135,6 +134,6 @@ public/                character, brand, pair and wallet images (WebP)
 
 `$DOTFAMILY` on Robinhood Chain (chain id 4663): **published at launch**.
 It is set in one place, `src/config/brand.ts`. Only trust the address shown on
-[dotfamily.fun](https://dotfamily.fun) and posted by [@dotfamily](https://x.com/dotfamily).
+[dotfamily.fun](https://dotfamily.fun) and posted by [@dotfamilyfun](https://x.com/dotfamilyfun).
 
 Dot Family is an independent community project. Nothing here is financial advice.
