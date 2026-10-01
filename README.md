@@ -3,7 +3,7 @@
 **Your dot. Your family.**
 Join the dot family. Create with lore. Your token.
 
-Website: [dotfamily.fun](https://dotfamily.fun) · X: [@dotfamilyfun](https://x.com/dotfamilyfun) · GitHub: [DotFamilyFun/DotFamily](https://github.com/DotFamilyFun/DotFamily) · Token: `$DOTFAMILY` on Robinhood Chain
+Website: [dotfamily.fun](https://dotfamily.fun) · X: [@dotfamily_fun](https://x.com/dotfamily_fun) · GitHub: [DotFamilyFun/DotFamily](https://github.com/DotFamilyFun/DotFamily) · Token: `$DOTFAMILY` on Robinhood Chain
 
 ## The problem
 
@@ -134,6 +134,6 @@ public/                character, brand, pair and wallet images (WebP)
 
 `$DOTFAMILY` on Robinhood Chain (chain id 4663): **published at launch**.
 It is set in one place, `src/config/brand.ts`. Only trust the address shown on
-[dotfamily.fun](https://dotfamily.fun) and posted by [@dotfamilyfun](https://x.com/dotfamilyfun).
+[dotfamily.fun](https://dotfamily.fun) and posted by [@dotfamily_fun](https://x.com/dotfamily_fun).
 
 Dot Family is an independent community project. Nothing here is financial advice.
